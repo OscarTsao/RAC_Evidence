@@ -1,0 +1,45 @@
+{
+    "diagnosis": "Major Depressive Disorder",
+    "criteria": [
+      {
+        "id": "A.1",
+        "text": "Depressed mood most of the day, nearly every day, as indicated by either subjective report (e.g., feels sad, empty, hopeless) or observation made by others (e.g.,appears tearful). (Note: In children and adolescents, can be irritable mood.)"
+      },
+      {
+        "id": "A.2",
+        "text": "Markedly diminished interest or pleasure in all, or almost all, activities most of the day, nearly every day (as indicated by either subjective account or observation)."
+      },
+      {
+        "id": "A.3",
+        "text": "Significant weight loss when not dieting or weight gain (e.g., a change of more than 5% of body weight in a month), or decrease or increase in appetite nearly every day. (Note: In children, consider failure to make expected weight gains.)"
+      },
+      {
+        "id": "A.4",
+        "text": "Insomnia or hypersomnia nearly every day."
+      },
+      {
+        "id": "A.5",
+        "text": "Psychomotor agitation or retardation nearly every day (observable by others; not merely subjective feelings of restlessness or being slowed down)."
+      },
+      {
+        "id": "A.6",
+        "text": "Fatigue or loss of energy nearly every day."
+      },
+      {
+        "id": "A.7",
+        "text": "Feelings of worthlessness or excessive or inappropriate guilt (which may be delusional) nearly every day (not merely self-reproach or guilt about being sick)."
+      },
+      {
+        "id": "A.8",
+        "text": "Diminished ability to think or concentrate, or indecisiveness, nearly every day (either by subjective account or as observed by others)."
+      },
+      {
+        "id": "A.9",
+        "text": "Recurrent thoughts of death (not just fear of dying), recurrent suicidal ideation without a specific plan, or a suicide attempt or a specific plan for committing suicide."
+      }, 
+      {
+        "id": "A.10",
+        "text": "for non-DSM-5 clinical/positive discriminations"
+      }
+    ]
+  }
