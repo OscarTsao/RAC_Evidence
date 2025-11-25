@@ -1,0 +1,40 @@
+exp: demo
+
+# MLflow experiment tracking
+mlflow_tracking_uri: file:./mlruns
+experiment_name: ${exp}
+
+# Optuna HPO settings
+hpo_n_trials: 50
+optuna_storage: sqlite:///optuna.db
+
+data:
+  raw_dir: data/raw
+  interim_dir: data/interim
+  processed_dir: data/processed
+graph:
+  node_feats:
+    post: {type: pooled_ce, dim: 1024}
+    sentence: {type: pooled_ce, dim: 1024, normalize: true}
+    criterion: {type: encoder_desc, dim: 1024, add_is_core: true}
+  edges:
+    supports: {feat: [logit_sc, prob_sc, neg, hedge, duration_days, pos_norm], topk_per_cid: 10}
+    matches: {feat: [logit_pc, prob_pc]}
+    near: {strategy: adjacent_knn, k: 2}
+    cooccur: {source: data/external/symptom_cooccur.csv, feat: [pmi, cofreq]}
+model:
+  type: HGT
+  layers: 2
+  hidden: 64
+  dropout: 0.2
+loss:
+  lambda_edge: 1.0
+  lambda_node: 1.0
+  lambda_cons: 0.3
+  cons_margin: 0.05
+train:
+  lr: 1e-3
+  batch_size_posts: 4
+  epochs: 3
+  use_amp: true
+  amp_dtype: bf16

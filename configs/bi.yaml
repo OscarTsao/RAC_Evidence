@@ -1,0 +1,55 @@
+exp: demo
+split:
+  seed: 42
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  interim_dir: data/interim
+model:
+  name: intfloat/e5-large-v2
+train:
+  lr: 2e-5
+  batch_size: 256
+  epochs: 2
+  temperature: 0.05
+faiss:
+  index: hnsw
+  dim: 1024
+  efSearch: 64
+  M: 32
+  use_faiss: false
+retrieve:
+  per_post: true
+  topK: 50
+fusion:
+  mode: three_way_rrf  # options: dense_only | native_hybrid | two_way_rrf | three_way_rrf
+  rrf_k: 60
+  final_topK: 50
+  channels:
+    dense:
+      enabled: true
+      per_post: true
+      topK: 50
+    sparse_m3:
+      enabled: true
+      per_post: true
+      topK: 50
+    bm25:
+      enabled: true
+      index_dir: data/interim/bm25_index
+      topK: 50
+      analyzer: default
+  dynamic_K:
+    enabled: true
+    cid_boost:
+      - duration_2w
+      - nearly_every_day
+      - weight_change
+      - insomnia
+      - hypersomnia
+    boosted_topK: 100
+  same_post_filter: true
+  tie_breaker: dense_then_sparse
+  cache:
+    query_embed: true
+    bm25_hits: true

@@ -1,0 +1,37 @@
+exp: demo
+seed: 42
+
+# MLflow experiment tracking
+mlflow_tracking_uri: file:./mlruns
+experiment_name: ${exp}
+
+# Optuna HPO settings
+hpo_n_trials: 50
+optuna_storage: sqlite:///optuna.db
+
+data:
+  raw_dir: data/raw
+  interim_dir: data/interim
+  processed_dir: data/processed
+  sent_max_len: 256
+retrieve:
+  topK: 50
+rerank:
+  keep_topk: 10
+loss:
+  bce_pos_weight: 2.0
+  ranking_gamma: 0.5
+  ranking_margin: 0.2
+train:
+  lr: 1e-3
+  batch_size: 8
+  epochs: 2
+  use_amp: true
+  amp_dtype: bf16
+  grad_accum: 1
+  shuffle: true
+dataloader:
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2

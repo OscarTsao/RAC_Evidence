@@ -1,0 +1,12 @@
+exp: demo
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  interim_dir: data/interim
+split:
+  seed: 42
+  ratios: {train: 0.8, dev: 0.1, test: 0.1}
+tokenization:
+  sent_max_len: 256
+  chunk_max_len: 512
+  stride: 128

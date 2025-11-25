@@ -1,0 +1,10 @@
+exp: demo
+task: [sc, pc]
+metric: nll
+data:
+  raw_dir: data/raw
+  interim_dir: data/interim
+inputs:
+  sc: data/interim/ce_sc_scores.jsonl
+  pc: data/interim/ce_pc_post.jsonl
+output: outputs/runs/${exp}/calibration.json

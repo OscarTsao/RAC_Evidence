@@ -1,8 +1,15 @@
-"""AI/ML Experiment Template - Source Package."""
+"""clin-gnn-rac package."""
+
+__all__ = [
+    "dataio",
+    "retrieval",
+    "crossenc",
+    "calib",
+    "graph",
+    "metrics",
+    "features",
+    "utils",
+    "cli",
+]
 
 __version__ = "0.1.0"
-
-# Keep the public surface minimal; import subpackages on demand.
-__all__ = [
-    "__version__",
-]

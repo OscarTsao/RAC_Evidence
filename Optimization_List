@@ -1,0 +1,18 @@
+| Feature / Setting | What It Does | Why Use It / Benefit | Notes |
+|-------------------|---------------|------------------------|--------|
+| bf16 AMP | Mixed precision using bfloat16 | Fast like fp16 but more stable (no loss scaler needed) | Use if GPU supports bf16 |
+| fp16 AMP + GradScaler | Mixed precision using float16 | Big speed & memory savings vs FP32 | Needs GradScaler to avoid overflow |
+| TF32 (Ampere+) | TF32 for matmuls | ~2×+ faster FP32-like training | Safe, minimal accuracy loss |
+| SDPA Flash | PyTorch fused attention kernels | Memory-efficient & fast attention | No external install required |
+| FlashAttention v2/v3 | Custom high-performance attention kernels | Often fastest for long seq LLMs | Requires installation; choose instead of SDPA |
+| Gradient Checkpointing | Saves activation memory by recomputation | Train larger batch/seq on same VRAM | ~10–30% slower per step |
+| Fused AdamW (`adamw_torch_fused`) | Fuses optimizer ops in fewer kernels | Faster optimizer step, less overhead | Best default for speed |
+| 8-bit AdamW (`adamw_bnb_8bit`) | Stores optimizer states in 8-bit | Saves ~50% VRAM on optimizer | Small overhead, same quality in finetune |
+| LoRA | Parameter-efficient fine-tuning | Reduces trainable params 90–99% | Minimal VRAM, fast, same quality for CLS tasks |
+| QLoRA (NF4+bf16 compute) | Quantized LoRA with 4-bit weights | Train 7B–70B on single GPU | Best for low VRAM setups |
+| `torch.compile` | Graph optimize + fuse kernels | 5–25% faster training for free | Best with static shapes |
+| CUDA Graphs | Capture & replay GPU graph | Removes CPU kernel launch overhead | Shapes must be fully static |
+| Channels Last (NHWC) | Change tensor memory layout | 5–20% speed boost for Conv/ViT | Small/no gain for text-only LLMs |
+| Sequence Packing | Packs multiple short samples into long ones | Highest throughput gain for short-text tasks | Need correct loss masking |
+| Length Bucketing | Group samples by similar seq length | Reduces padding → more tokens/sec | Works for all model types |
+| Pinned Memory + Workers | Faster host→GPU transfers | Prevents dataloader from bottlenecking | Use with DataLoader |

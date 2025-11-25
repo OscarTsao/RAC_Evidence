@@ -1,0 +1,82 @@
+import torch
+from torch.cuda.amp import autocast, GradScaler
+
+# ===========================
+#  PRECISION & KERNEL SETTINGS
+# ===========================
+use_bf16 = torch.cuda.is_bf16_supported()     # Prefer bf16 if available
+autocast_dtype = torch.bfloat16 if use_bf16 else torch.float16
+scaler = None if use_bf16 else GradScaler()   # fp16 requires GradScaler, bf16 doesn't
+
+# Enable TF32 (fast FP32 matmuls on Ampere+)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
+# ===========================
+#  ATTENTION IMPLEMENTATION
+#  (Pick ONE backend below)
+# ===========================
+# Recommended default (no extra install)
+attn_backend = "sdpa"              # PyTorch Scaled-Dot Product Attention (uses flash backend automatically when possible)
+
+# If FlashAttention v2/v3 installed, you may choose:
+# attn_backend = "flash_attention_2"
+
+model.config.attn_implementation = attn_backend
+model.config.use_cache = False     # must disable when using gradient checkpointing
+
+# ===========================
+#  OPTIMIZER & MEMORY SAVERS
+# ===========================
+optimizer_choice = "adamw_torch_fused"   # fused AdamW (faster) 
+# Alternative for lower memory:
+# optimizer_choice = "adamw_bnb_8bit"    # bitsandbytes 8-bit optimizer for VRAM savings
+
+gradient_checkpointing = True     # saves memory, increases compute cost 10–30%
+max_grad_norm = 1.0               # safe with AMP to avoid overflow
+
+# OPTIONAL: LoRA or QLoRA for Decoder LLMs
+use_lora = False
+# If True: inject LoRA adapters for q_proj/k_proj/v_proj/o_proj, gate_up_proj, etc.
+
+# ===========================
+#  PYTORCH PERFORMANCE MODES
+# ===========================
+use_torch_compile = True          # optimize graph with fusion and kernel tuning (best with static shapes)
+use_cuda_graphs = False           # enable only if shapes STATIC and after compile is stable
+
+# ===========================
+#  DATALOADER BOOSTS
+# ===========================
+# - Use pinned memory
+# - Use large num_workers
+# - Use pre-tokenized datasets
+# - Use sequence packing & length bucketing
+# (Shown as comments because they depend on DataLoader, not model)
+
+# Example:
+# loader = DataLoader(dataset,
+#     batch_size=...,
+#     pin_memory=True,
+#     num_workers=8,
+#     persistent_workers=True
+# )
+
+# ===========================
+#  TRAIN STEP EXAMPLE
+# ===========================
+for batch in loader:
+    optimizer.zero_grad(set_to_none=True)
+    with autocast(dtype=autocast_dtype):
+        loss = model(**batch).loss
+
+    if scaler:  # fp16 path
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        scaler.step(optimizer)
+        scaler.update()
+    else:       # bf16 path
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        optimizer.step()

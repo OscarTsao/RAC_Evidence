@@ -47,6 +47,12 @@ outputs/*
 !outputs/.gitkeep
 mlruns/*
 !mlruns/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+outputs/runs/*
+!outputs/runs/.gitkeep
 
 # Large groundtruth files (exceed GitHub 100MB limit)
 data/groundtruth/evidence_sentence_groundtruth.csv

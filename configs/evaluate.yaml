@@ -1,0 +1,12 @@
+exp: demo
+data:
+  raw_dir: data/raw
+  interim_dir: data/interim
+  processed_dir: data/processed
+  outputs_dir: outputs/runs/${exp}
+thresholds:
+  retrieval_recall_at_50: 0.85
+  ece_improve_fraction: 0.2
+  gnn_min_gain:
+    evidence_auprc: 0.02
+    criteria_macro_f1: 0.02
