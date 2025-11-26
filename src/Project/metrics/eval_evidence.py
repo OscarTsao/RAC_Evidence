@@ -49,6 +49,9 @@ def coverage_at_k(
 ) -> float:
     """Compute Coverage@K (recall of positives in top-K).
 
+    NOTE: This function is deprecated for evidence evaluation.
+    Use coverage_at_k_grouped() instead for per-(post, criterion) evaluation.
+
     Args:
         y_true: Ground truth labels
         y_score: Prediction scores
@@ -63,6 +66,51 @@ def coverage_at_k(
     top_k_idx = np.argsort(y_score)[::-1][:k]
     top_k_true = y_true[top_k_idx]
     return float(np.sum(top_k_true) / np.sum(y_true))
+
+
+def coverage_at_k_grouped(
+    predictions: List[Dict], k: int = 5, prob_key: str = "prob"
+) -> float:
+    """Compute Coverage@K grouped by (post_id, cid).
+
+    For evidence evaluation, we need to compute top-K within each
+    (post_id, criterion) pair, not globally.
+
+    Args:
+        predictions: List of predictions with post_id, cid, label, prob
+        k: Top-K
+        prob_key: Key to use for probability values
+
+    Returns:
+        Coverage@K (fraction of positives appearing in top-K per group)
+    """
+    from collections import defaultdict
+
+    # Group by (post_id, cid)
+    by_pc = defaultdict(list)
+    for p in predictions:
+        key = (p["post_id"], p["cid"])
+        by_pc[key].append(p)
+
+    total_positives = 0
+    positives_in_topk = 0
+
+    for group in by_pc.values():
+        # Sort by score descending
+        sorted_group = sorted(group, key=lambda x: x.get(prob_key, 0.0), reverse=True)
+        topk = sorted_group[:k]
+
+        # Count positives in this group
+        n_pos = sum(1 for p in group if p["label"] == 1)
+        topk_pos = sum(1 for p in topk if p["label"] == 1)
+
+        total_positives += n_pos
+        positives_in_topk += topk_pos
+
+    if total_positives == 0:
+        return 0.0
+
+    return float(positives_in_topk / total_positives)
 
 
 def recall_at_k(
@@ -129,8 +177,9 @@ def evaluate_evidence_predictions(
     # Precision@K, Coverage@K
     for k in k_values:
         metrics[f"precision@{k}"] = precision_at_k(y_true, y_prob, k)
-        metrics[f"coverage@{k}"] = coverage_at_k(y_true, y_prob, k)
-        metrics[f"recall@{k}"] = recall_at_k(y_true, y_prob, k)
+        # Use grouped version for per-(post,cid) evaluation
+        metrics[f"coverage@{k}"] = coverage_at_k_grouped(predictions, k, prob_key)
+        metrics[f"recall@{k}"] = coverage_at_k_grouped(predictions, k, prob_key)
 
     # Calibration (ECE)
     metrics["ece"] = compute_ece(y_prob.tolist(), y_true.tolist(), bins=15)
