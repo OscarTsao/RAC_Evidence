@@ -16,6 +16,11 @@ import numpy as np
 from Project.utils.logging import get_logger
 
 
+def normalize_key(value):
+    """Normalize ID values to strings for consistent comparison."""
+    return str(value)
+
+
 def compute_retrieval_recall(
     fold_predictions: List[Dict],
     gold_labels: List[Dict] | None = None,
@@ -39,7 +44,7 @@ def compute_retrieval_recall(
     # Extract retrieved (post, sent, cid) triples
     retrieved_set = set()
     for pred in fold_predictions:
-        key = (pred["post_id"], pred["sent_id"], pred["cid"])
+        key = (normalize_key(pred["post_id"]), normalize_key(pred["sent_id"]), normalize_key(pred["cid"]))
         retrieved_set.add(key)
 
     # Extract gold positives
@@ -48,14 +53,14 @@ def compute_retrieval_recall(
         gold_positives = set()
         for pred in fold_predictions:
             if pred["label"] == 1:
-                key = (pred["post_id"], pred["sent_id"], pred["cid"])
+                key = (normalize_key(pred["post_id"]), normalize_key(pred["sent_id"]), normalize_key(pred["cid"]))
                 gold_positives.add(key)
     else:
         # Use external gold labels
         gold_positives = set()
         for label in gold_labels:
             if label.get("label") == 1 or label.get("groundtruth") == 1:
-                key = (label["post_id"], label["sent_id"], label["cid"])
+                key = (normalize_key(label["post_id"]), normalize_key(label["sent_id"]), normalize_key(label["cid"]))
                 gold_positives.add(key)
 
     # Compute overall recall
@@ -68,8 +73,8 @@ def compute_retrieval_recall(
     by_crit: Dict[str, Dict[str, set]] = defaultdict(lambda: {"retrieved": set(), "gold": set()})
 
     for pred in fold_predictions:
-        cid = pred["cid"]
-        key = (pred["post_id"], pred["sent_id"])
+        cid = normalize_key(pred["cid"])
+        key = (normalize_key(pred["post_id"]), normalize_key(pred["sent_id"]))
         by_crit[cid]["retrieved"].add(key)
 
         if pred["label"] == 1:
@@ -125,7 +130,7 @@ def compute_retrieval_recall_at_k(
     # Group by (post_id, cid)
     by_group = defaultdict(list)
     for pred in fold_predictions:
-        key = (pred["post_id"], pred["cid"])
+        key = (normalize_key(pred["post_id"]), normalize_key(pred["cid"]))
         by_group[key].append(pred)
 
     # Compute recall@K for each group

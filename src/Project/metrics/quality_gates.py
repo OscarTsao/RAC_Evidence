@@ -252,6 +252,60 @@ def check_data_leakage(
     return GateResult(gate=gate, value=float(len(overlap)), passed=passed, message=message)
 
 
+def transform_sweep_metrics_to_acceptance_format(sweep_metrics: Dict, target_k: int = 20) -> Dict:
+    """Transform sweep metrics format to acceptance check format.
+
+    Converts from:
+        {"results": [{"k": 20, "overall": {"recall_at_k": 0.95}, "per_criterion": {...}}]}
+
+    To:
+        {"overall": {"recall@20": 0.95}, "per_criterion": {"c1": {"recall@20": ...}}}
+
+    Args:
+        sweep_metrics: Sweep metrics dict with results array
+        target_k: The K value to extract (default: 20)
+
+    Returns:
+        Dict with transformed metrics
+    """
+    results = sweep_metrics.get("results", [])
+
+    # Find the result for target_k
+    target_result = None
+    for result in results:
+        if result.get("k") == target_k:
+            target_result = result
+            break
+
+    if not target_result:
+        # Return empty structure if k not found
+        return {"overall": {}, "per_criterion": {}}
+
+    # Transform overall metrics: recall_at_k -> recall@{k}
+    overall = {}
+    for key, value in target_result.get("overall", {}).items():
+        if key == "recall_at_k":
+            overall[f"recall@{target_k}"] = value
+        elif key == "coverage_at_k":
+            overall[f"coverage@{target_k}"] = value
+        else:
+            overall[key] = value
+
+    # Transform per-criterion metrics
+    per_criterion = {}
+    for cid, crit_metrics in target_result.get("per_criterion", {}).items():
+        per_criterion[cid] = {}
+        for key, value in crit_metrics.items():
+            if key == "recall_at_k":
+                per_criterion[cid][f"recall@{target_k}"] = value
+            elif key == "coverage_at_k":
+                per_criterion[cid][f"coverage@{target_k}"] = value
+            else:
+                per_criterion[cid][key] = value
+
+    return {"overall": overall, "per_criterion": per_criterion}
+
+
 def run_acceptance_checks(
     retrieval_metrics_path: Path,
     evidence_metrics_path: Path,
@@ -278,7 +332,10 @@ def run_acceptance_checks(
 
     # Load metrics
     with open(retrieval_metrics_path) as f:
-        retrieval_metrics = json.load(f)
+        raw_retrieval_metrics = json.load(f)
+
+    # Transform sweep metrics format to acceptance format
+    retrieval_metrics = transform_sweep_metrics_to_acceptance_format(raw_retrieval_metrics, target_k=20)
 
     with open(evidence_metrics_path) as f:
         evidence_metrics = json.load(f)
