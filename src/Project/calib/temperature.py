@@ -17,6 +17,34 @@ from Project.utils.io import read_jsonl
 from Project.utils.logging import get_logger
 
 
+class TemperatureScaler:
+    """Temperature scaling wrapper for probability calibration."""
+
+    def __init__(self, lr: float = 0.01, steps: int = 200):
+        """Initialize temperature scaler.
+
+        Args:
+            lr: Learning rate for optimization
+            steps: Number of optimization steps
+        """
+        self.lr = lr
+        self.steps = steps
+        self.temperature = 1.0
+
+    def fit(self, logits: Iterable[float], labels: Iterable[int]) -> float:
+        """Fit temperature parameter.
+
+        Args:
+            logits: Model logits
+            labels: Ground truth labels
+
+        Returns:
+            Optimal temperature value
+        """
+        self.temperature = learn_temperature(logits, labels, lr=self.lr, steps=self.steps)
+        return self.temperature
+
+
 def learn_temperature(
     logits: Iterable[float],
     labels: Iterable[int],
