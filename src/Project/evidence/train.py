@@ -35,7 +35,7 @@ def train_fold(
     cfg: DictConfig,
     output_dir: Path,
     fold: int,
-) -> Tuple[Path, float]:
+) -> Tuple[Path, Dict]:
     """Train cross-encoder for one fold.
 
     Args:
@@ -46,7 +46,8 @@ def train_fold(
         fold: Fold number
 
     Returns:
-        Tuple of (checkpoint_path, temperature)
+        Tuple of (checkpoint_path, temperature_dict)
+            temperature_dict contains 'global' and 'per_class' temperatures
     """
     logger = get_logger(__name__)
 
@@ -139,29 +140,58 @@ def train_fold(
     # Temperature scaling on dev set
     logger.info(f"Fitting temperature on {len(dev_examples)} dev examples")
     dev_logits = []
+    dev_cids = []  # Track criterion IDs
     model.eval()
 
     with torch.no_grad():
         for i in range(0, len(dev_dataset), training_args.per_device_eval_batch_size):
             batch_data = dev_dataset[i : i + training_args.per_device_eval_batch_size]
+            batch_examples = dev_examples[i : i + training_args.per_device_eval_batch_size]
             inputs = data_collator(batch_data)
             inputs = {k: v.to(model.device) for k, v in inputs.items()}
             outputs = model(**inputs)
             logits = outputs.logits.squeeze(-1)
             dev_logits.extend(logits.cpu().tolist())
+            dev_cids.extend([ex.cid for ex in batch_examples])
 
-    # Fit temperature
+    # Fit global temperature (fallback)
     scaler = TemperatureScaler()
-    temperature = scaler.fit(dev_logits, dev_labels)
-    logger.info(f"Fold {fold} temperature: {temperature:.4f}")
+    global_temp = scaler.fit(dev_logits, dev_labels)
+    logger.info(f"Fold {fold} global temperature: {global_temp:.4f}")
 
-    return ckpt_path, temperature
+    # Fit per-class temperatures
+    per_class_temps = {}
+    cid_to_idx = {}
+    for i, (logit, label, cid) in enumerate(zip(dev_logits, dev_labels, dev_cids)):
+        if cid not in cid_to_idx:
+            cid_to_idx[cid] = []
+        cid_to_idx[cid].append(i)
+
+    for cid, indices in cid_to_idx.items():
+        cid_logits = [dev_logits[i] for i in indices]
+        cid_labels = [dev_labels[i] for i in indices]
+
+        if len(cid_logits) < 10:  # Skip small classes
+            per_class_temps[cid] = global_temp
+            logger.info(f"  {cid}: {len(cid_logits)} samples, using global temp")
+        else:
+            temp_scaler = TemperatureScaler()
+            cid_temp = temp_scaler.fit(cid_logits, cid_labels)
+            per_class_temps[cid] = cid_temp
+            logger.info(f"  {cid}: {len(cid_logits)} samples, temp={cid_temp:.4f}")
+
+    temperature_dict = {
+        "global": global_temp,
+        "per_class": per_class_temps
+    }
+
+    return ckpt_path, temperature_dict
 
 
 def generate_oof_predictions(
     test_examples: List[SCExample],
     checkpoint_path: Path,
-    temperature: float,
+    temperature_dict: Dict,
     cfg: DictConfig,
 ) -> List[Dict]:
     """Generate OOF predictions for test fold.
@@ -169,7 +199,7 @@ def generate_oof_predictions(
     Args:
         test_examples: Test examples
         checkpoint_path: Path to model checkpoint
-        temperature: Temperature for scaling
+        temperature_dict: Dict with 'global' and 'per_class' temperatures
         cfg: Config
 
     Returns:
@@ -218,8 +248,17 @@ def generate_oof_predictions(
             # Apply temperature scaling
             logits_tensor = torch.tensor(logits, dtype=torch.float32)
             probs_uncal = torch.sigmoid(logits_tensor).tolist()
-            safe_temp = max(temperature, 1e-4)
-            probs_cal = torch.sigmoid(logits_tensor / safe_temp).tolist()
+
+            # Apply per-class temperature (with global fallback)
+            global_temp = temperature_dict.get("global", 1.0)
+            per_class_temps = temperature_dict.get("per_class", {})
+
+            probs_cal = []
+            for logit_val, ex in zip(logits, batch_examples):
+                cid_temp = per_class_temps.get(ex.cid, global_temp)
+                safe_temp = max(cid_temp, 1e-4)
+                prob = torch.sigmoid(torch.tensor(logit_val) / safe_temp).item()
+                probs_cal.append(prob)
 
             # Store predictions
             for ex, logit, p_uncal, p_cal in zip(batch_examples, logits, probs_uncal, probs_cal):
@@ -329,24 +368,42 @@ def train_5fold_evidence(
 
     # Save fold temperatures
     temps_path = output_dir / "fold_temperatures.json"
+    global_temps = []
+    per_class_temps: Dict[str, List[float]] = {}
+    for temp in fold_temperatures:
+        if isinstance(temp, dict):
+            global_temps.append(float(temp.get("global", 1.0)))
+            for cid, cid_temp in temp.get("per_class", {}).items():
+                per_class_temps.setdefault(cid, []).append(float(cid_temp))
+        else:
+            global_temps.append(float(temp))
+    global_mean = float(np.mean(global_temps)) if global_temps else 1.0
+    global_std = float(np.std(global_temps)) if global_temps else 0.0
+    per_class_mean = {cid: float(np.mean(vals)) for cid, vals in per_class_temps.items()}
+    per_class_std = {cid: float(np.std(vals)) for cid, vals in per_class_temps.items()}
     with open(temps_path, "w") as f:
         json.dump(
             {
                 "temperatures": fold_temperatures,
-                "mean": float(np.mean(fold_temperatures)),
-                "std": float(np.std(fold_temperatures)),
+                "global": {
+                    "per_fold": global_temps,
+                    "mean": global_mean,
+                    "std": global_std,
+                },
+                "per_class_mean": per_class_mean,
+                "per_class_std": per_class_std,
             },
             f,
             indent=2,
         )
 
-    logger.info(f"Fold temperatures: {fold_temperatures}")
-    logger.info(f"Mean temperature: {np.mean(fold_temperatures):.4f}")
+    logger.info("Fold global temperatures: %s", global_temps)
+    logger.info("Mean global temperature: %.4f", global_mean)
 
     return {
         "oof_path": oof_path,
         "temperatures_path": temps_path,
         "n_predictions": len(all_oof_predictions),
-        "mean_temperature": float(np.mean(fold_temperatures)),
+        "mean_temperature": global_mean,
         "k_infer": k_infer,
     }

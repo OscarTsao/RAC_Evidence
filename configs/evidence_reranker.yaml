@@ -38,3 +38,16 @@ train:
 seed: 42
 output_dir: outputs/runs/${exp}/reranker
 ks_sensitivity: [20, 30, 50]
+
+# Calibration settings
+calibration:
+  per_class: true                # Enable per-class temperature scaling
+  temperature_lr: 0.01           # Learning rate for temperature optimization
+  temperature_steps: 200         # Number of optimization steps
+  min_samples_per_class: 10      # Minimum samples required for per-class temperature
+
+# Threshold optimization settings
+threshold_optimization:
+  enabled: true                  # Enable optimal threshold optimization
+  metric: f1                     # Metric to optimize (f1, precision, recall)
+  min_samples: 30                # Minimum samples per class for threshold optimization

@@ -15,11 +15,11 @@ export PYTHONPATH := src
 export LD_LIBRARY_PATH := $(CONDA_PREFIX)/lib:$(LD_LIBRARY_PATH)
 
 .PHONY: help setup prepare index retrieve sweep_recall select_k retriever_ft \
-	train_ce_sc train_ce_pc calibrate infer infer_sc infer_pc train_evidence \
-	train_evidence_5fold acceptance_checks sc_5fold sc_5fold_dry build_graph \
-	train_gnn evaluate test real_dev_index real_dev_retrieve real_dev_sweep \
-	real_dev_select_k real_dev_train_5fold real_dev_sc_5fold real_dev_sc_5fold_dry \
-	real_dev_acceptance real_dev_full_pipeline all
+	train_ce_sc train_ce_pc calibrate infer infer_sc infer_pc hpo_ce_sc hpo_ce_pc \
+	train_evidence train_evidence_5fold acceptance_checks sc_5fold sc_5fold_dry \
+	build_graph train_gnn evaluate test real_dev_index real_dev_retrieve \
+	real_dev_sweep real_dev_select_k real_dev_train_5fold real_dev_sc_5fold \
+	real_dev_sc_5fold_dry real_dev_acceptance real_dev_full_pipeline all
 
 help:
 	@echo "==================================================================="
@@ -45,6 +45,10 @@ help:
 	@echo "Retrieval tuning:"
 	@echo "  make sweep_recall       Sweep K values for recall"
 	@echo "  make select_k           Select K and update runtime config"
+	@echo ""
+	@echo "Hyperparameter search:"
+	@echo "  make hpo_ce_sc          Optuna HPO for CE-SC (GPU-parallel)"
+	@echo "  make hpo_ce_pc          Optuna HPO for CE-PC (GPU-parallel)"
 	@echo ""
 	@echo "STRICT 5-fold evidence pipeline:"
 	@echo "  make train_evidence_5fold    Train 5-fold Evidence CE"
@@ -102,6 +106,12 @@ infer_sc:
 
 infer_pc:
 	$(PYTHON) scripts/infer_ce_pc.py --cfg $(CE_PC_CFG)
+
+hpo_ce_sc:
+	$(PYTHON) scripts/hpo_ce.py --cfg $(CE_SC_CFG) --task sc
+
+hpo_ce_pc:
+	$(PYTHON) scripts/hpo_ce.py --cfg $(CE_PC_CFG) --task pc
 
 train_evidence:
 	PYTHONPATH=src $(PYTHON) scripts/train_bge_reranker.py --cfg $(RERANKER_CFG) --runtime_cfg $(RUNTIME_CFG) --exp $(EXP)

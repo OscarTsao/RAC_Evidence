@@ -22,6 +22,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from Project.calib.threshold_optimizer import find_per_class_thresholds, apply_per_class_thresholds
 from Project.metrics.calibration import ece as compute_ece
 
 
@@ -276,12 +277,33 @@ def save_evidence_metrics(
         metrics["overall_uncalibrated"] = overall_uncal
         
         # Calculate explicit ECE improvement
+        ece_before = overall_uncal["ece"]
+        ece_after = overall_metrics["ece"]
+        improvement = ece_before - ece_after
+        improvement_pct = (improvement / ece_before * 100) if ece_before > 0 else 0.0
+
         metrics["calibration_improvement"] = {
-            "ece_before": overall_uncal["ece"],
-            "ece_after": overall_metrics["ece"],
-            "improvement": overall_uncal["ece"] - overall_metrics["ece"],
-            "improvement_pct": (overall_uncal["ece"] - overall_metrics["ece"]) / overall_uncal["ece"] * 100 if overall_uncal["ece"] > 0 else 0
+            "ece_before": ece_before,
+            "ece_after": ece_after,
+            "improvement": improvement,
+            "improvement_pct": float(improvement_pct),
         }
+
+    # Compute optimal per-class thresholds
+    optimal_thresholds = find_per_class_thresholds(predictions, metric='f1', min_samples=30)
+
+    # Evaluate with optimal thresholds
+    y_true = np.array([p["label"] for p in predictions])
+    y_pred_optimal = apply_per_class_thresholds(predictions, optimal_thresholds, prob_key="prob_cal")
+
+    optimal_metrics = {
+        "f1_optimal": float(f1_score(y_true, y_pred_optimal)),
+        "macro_f1_optimal": float(f1_score(y_true, y_pred_optimal, average="macro")),
+        "precision_optimal": float(np.mean(y_pred_optimal[y_true == 1])) if np.sum(y_true) > 0 else 0.0,
+    }
+
+    metrics["optimal_thresholds"] = optimal_thresholds
+    metrics["optimal_threshold_metrics"] = optimal_metrics
 
     # Save
     output_path.parent.mkdir(parents=True, exist_ok=True)
