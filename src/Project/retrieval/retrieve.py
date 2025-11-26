@@ -80,6 +80,10 @@ class FusionRetriever:
         cfg: DictConfig,
         sparse_index: SparseM3Index | None = None,
         bm25_index: BM25Index | None = None,
+        default_k: int | None = None,
+        runtime_overrides: Dict[str, int] | None = None,
+        min_with_post_len: bool = True,
+        same_post_only: bool = True,
     ) -> None:
         self.model = model
         self.dense_index = dense_index
@@ -93,6 +97,10 @@ class FusionRetriever:
         self._encode_query = (
             lru_cache(maxsize=256)(self._encode_query_uncached) if self.cache_enabled else self._encode_query_uncached
         )
+        self.default_k = default_k if default_k is not None else _cfg_get(cfg, "fusion.final_topK")
+        self.runtime_overrides: Dict[str, int] = runtime_overrides or {}
+        self.min_with_post_len = min_with_post_len
+        self.same_post_only = same_post_only
 
     def _encode_query_uncached(self, cid: str, text_query: str):
         dense_vec = self.model.encode([text_query])
@@ -125,12 +133,20 @@ class FusionRetriever:
         post_id: str,
         criterion_id: str,
         text_query: str,
+        override_k: int | None = None,
+        min_with_post_len: bool | None = None,
+        same_post_only: bool | None = None,
     ) -> List[Tuple[str, float, ChannelRanks]]:
         mode = _cfg_get(self.cfg, "fusion.mode", "dense_only")
-        final_top_k = int(_cfg_get(self.cfg, "fusion.final_topK", _cfg_get(self.cfg, "retrieve.topK", 50)))
+        min_flag = self.min_with_post_len if min_with_post_len is None else min_with_post_len
+        same_post_flag = self.same_post_only if same_post_only is None else same_post_only
+        configured_k = int(_cfg_get(self.cfg, "fusion.final_topK", _cfg_get(self.cfg, "retrieve.topK", 50)))
+        runtime_k = self.runtime_overrides.get(criterion_id)
+        final_top_k = int(override_k if override_k is not None else runtime_k if runtime_k else self.default_k or configured_k)
         rrf_k = int(_cfg_get(self.cfg, "fusion.rrf_k", 60))
         tie_breaker = str(_cfg_get(self.cfg, "fusion.tie_breaker", "dense_then_sparse"))
         same_post_filter = bool(_cfg_get(self.cfg, "fusion.same_post_filter", True))
+        same_post_filter = same_post_flag if same_post_flag is not None else same_post_filter
         dense_topk = _channel_topk(self.cfg, "dense", criterion_id)
         sparse_topk = _channel_topk(self.cfg, "sparse_m3", criterion_id)
         bm25_topk = _channel_topk(self.cfg, "bm25", criterion_id)
@@ -173,7 +189,12 @@ class FusionRetriever:
         if not ranklists:
             self.logger.warning("No retrieval results for post=%s cid=%s", post_id, criterion_id)
             return []
-        return reciprocal_rank_fusion(ranklists, rrf_k=rrf_k, final_top_k=final_top_k, tie_breaker=tie_breaker)
+        fused = reciprocal_rank_fusion(ranklists, rrf_k=rrf_k, final_top_k=final_top_k, tie_breaker=tie_breaker)
+        post_len = len(self.dense_index.get(post_id).sent_ids) if post_id in self.dense_index else final_top_k
+        if min_flag:
+            final_top_k = min(final_top_k, post_len)
+        fused = sorted(fused, key=lambda x: (-x[1], x[0]))[:final_top_k]
+        return fused
 
 
 def retrieve_topk(
@@ -184,6 +205,10 @@ def retrieve_topk(
     cfg: DictConfig,
     sparse_index: SparseM3Index | None = None,
     bm25_index: BM25Index | None = None,
+    k_overrides: Dict[str, int] | None = None,
+    default_k: int | None = None,
+    min_with_post_len: bool = True,
+    same_post_only: bool = True,
 ) -> List[RetrievalSC]:
     """Retrieve candidates for a list of (post_id, cid) pairs with fusion."""
     retriever = FusionRetriever(
@@ -192,6 +217,10 @@ def retrieve_topk(
         cfg,
         sparse_index=sparse_index,
         bm25_index=bm25_index,
+        default_k=default_k,
+        runtime_overrides=k_overrides,
+        min_with_post_len=min_with_post_len,
+        same_post_only=same_post_only,
     )
     results: List[RetrievalSC] = []
     for post_id, cid in requests:
@@ -219,11 +248,27 @@ def run_retrieval_pipeline(
     output_path: Path,
     sparse_index: SparseM3Index | None = None,
     bm25_index: BM25Index | None = None,
+    k_overrides: Dict[str, int] | None = None,
+    default_k: int | None = None,
+    min_with_post_len: bool = True,
+    same_post_only: bool = True,
 ) -> List[RetrievalSC]:
     logger = get_logger(__name__)
     requests = [(pid, cid) for pid in post_ids for cid in criteria.keys()]
     start = time.time()
-    results = retrieve_topk(model, index, criteria, requests, cfg, sparse_index=sparse_index, bm25_index=bm25_index)
+    results = retrieve_topk(
+        model,
+        index,
+        criteria,
+        requests,
+        cfg,
+        sparse_index=sparse_index,
+        bm25_index=bm25_index,
+        k_overrides=k_overrides,
+        default_k=default_k,
+        min_with_post_len=min_with_post_len,
+        same_post_only=same_post_only,
+    )
     write_retrieval(results, output_path)
     logger.info("Wrote retrieval results to %s (%.2fs)", output_path, time.time() - start)
     return results

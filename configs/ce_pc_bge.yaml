@@ -1,0 +1,29 @@
+exp: real_dev
+seed: 42
+
+data:
+  raw_dir: data/raw_real
+  interim_dir: data/interim_real
+  max_length: 512
+
+model:
+  name: BAAI/bge-reranker-v2-m3
+  lora:
+    enabled: false
+
+train:
+  lr: 1.5e-5
+  batch_size: 4
+  gradient_accumulation: 8
+  epochs: 2
+  warmup_ratio: 0.06
+  weight_decay: 0.01
+  max_steps: null
+  logging_steps: 50
+  eval_steps: 200
+  save_steps: 200
+  bf16: true
+  fp16: false
+  grad_clip: 1.0
+
+output_dir: outputs/runs/${exp}/ce_pc_bge

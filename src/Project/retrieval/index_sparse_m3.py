@@ -57,10 +57,9 @@ def _encode_sparse_with_bge(texts: List[str]) -> List[Dict[str, float]]:
         return [_lexical_weights_from_tokens(_default_tokenize(t)) for t in texts]
     try:  # pragma: no cover - heavy dependency
         output = model.encode(
-            texts=texts,
+            texts,
             return_sparse=True,
             return_dense=False,
-            normalize_embeddings=True,
         )
         lexical_weights = output.get("lexical_weights", [])
         if lexical_weights:

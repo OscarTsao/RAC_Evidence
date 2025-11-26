@@ -1,12 +1,12 @@
-exp: demo
+exp: real_dev
 split:
   seed: 42
 data:
-  raw_dir: data/raw
+  raw_dir: data/raw_real
   processed_dir: data/processed
-  interim_dir: data/interim
+  interim_dir: data/interim_real
 model:
-  name: BAAI/bge-m3  # use BGE-M3 for dense bi-encoder
+  name: BAAI/bge-m3
 train:
   lr: 2e-5
   batch_size: 256
@@ -22,7 +22,7 @@ retrieve:
   per_post: true
   topK: 50
 fusion:
-  mode: native_hybrid  # dense + sparse (BGE-M3 lexical) fusion
+  mode: native_hybrid
   rrf_k: 60
   final_topK: 50
   channels:

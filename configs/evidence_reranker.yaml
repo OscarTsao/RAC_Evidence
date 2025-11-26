@@ -1,0 +1,40 @@
+exp: real_dev
+data:
+  raw_dir: data/raw_real
+  interim_dir: data/interim_real
+  retrieval_path: ${data.interim_dir}/retrieval_sc.jsonl
+model:
+  name: BAAI/bge-reranker-v2-m3
+  max_length: 384
+  lora:
+    enabled: true
+    r: 16
+    alpha: 32
+    dropout: 0.1
+train:
+  top_k_train: 100              # K for mining hard negatives during training
+  top_k_infer: 20               # K for inference/serving (STRICT)
+  neg_per_pos: 6                # 1:4 pos:neg ratio with 6 negatives per positive
+  # Negative sampling ratios (must sum to 1.0)
+  hard_neg_ratio: 0.8  # 80% from retrieval Top-K (same-post)
+  random_neg_ratio: 0.1  # 10% random same-post
+  cross_post_ratio: 0.1  # 10% cross-post SAFE (labels_pc==0)
+  xpost_max_frac: 0.2  # Cap cross-post at 20% max (strict guard)
+  epoch_refresh: false  # Refresh hard negatives each epoch
+  n_folds: 5  # Number of cross-validation folds
+  batch_size: 8
+  gradient_accumulation: 4
+  lr: 1.5e-5
+  weight_decay: 0.01
+  epochs: 2
+  warmup_ratio: 0.06
+  max_steps: null
+  eval_steps: 500
+  save_steps: 500
+  bf16: true
+  fp16: false
+  logging_steps: 50
+  grad_clip: 1.0
+seed: 42
+output_dir: outputs/runs/${exp}/reranker
+ks_sensitivity: [20, 30, 50]

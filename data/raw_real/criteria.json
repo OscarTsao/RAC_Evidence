@@ -1,0 +1,11 @@
+[
+  {"cid": "c1", "name": "Depressed mood", "is_core": true, "desc": "Persistent sadness or low mood"},
+  {"cid": "c2", "name": "Sleep disturbance", "is_core": true, "desc": "Insomnia or hypersomnia nearly every day"},
+  {"cid": "c3", "name": "Appetite change", "is_core": false, "desc": "Marked change in appetite or weight"},
+  {"cid": "c4", "name": "Anhedonia", "is_core": true, "desc": "Loss of interest or pleasure"},
+  {"cid": "c5", "name": "Fatigue", "is_core": false, "desc": "Loss of energy nearly every day"},
+  {"cid": "c6", "name": "Worthlessness", "is_core": false, "desc": "Feelings of worthlessness or guilt"},
+  {"cid": "c7", "name": "Concentration", "is_core": false, "desc": "Diminished ability to think or concentrate"},
+  {"cid": "c8", "name": "Psychomotor", "is_core": false, "desc": "Observable psychomotor agitation or retardation"},
+  {"cid": "c9", "name": "Suicidality", "is_core": true, "desc": "Recurrent thoughts of death or suicide"}
+]

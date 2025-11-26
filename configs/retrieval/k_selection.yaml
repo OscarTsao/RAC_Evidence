@@ -1,0 +1,33 @@
+sweep:
+  ks: [5, 10, 15, 20, 30, 50, 75, 100]
+  repeats: 2
+  measure:
+    metrics: [recall_at_k, coverage_at_k, ndcg_at_k, p95_latency_ms]
+    ndcg_k: 20
+  per_criterion: true
+  same_post_only: true
+
+gates:
+  recall_overall_min: 0.95
+  recall_per_criterion_min: 0.9
+  coverage_per_criterion_min: 0.9
+  p95_latency_budget_ms: null
+
+dynamic_policy:
+  sensitive_criteria:
+    - duration_2w
+    - nearly_every_day
+    - weight_change
+    - insomnia
+    - hypersomnia
+    - psychomotor
+  sensitive_cap_k: 50
+  global_default_k: 20
+  max_k: 100
+
+artifacts:
+  out_dir: outputs/runs/${EXP}/retrieval_sweep
+  sweep_json: sweep_metrics.json
+  sweep_plot_png: recall_vs_k.png
+  selected_k_json: selected_k.json
+  env_json: env.json

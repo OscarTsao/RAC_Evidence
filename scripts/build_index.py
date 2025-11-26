@@ -33,7 +33,13 @@ def main(
     build_bm25 = _cfg_get(cfg, "fusion.channels.bm25.enabled", False) if build_bm25 is None else build_bm25
     model = None
     if build_dense:
-        model = train_bi_encoder(dataset["sentences"], dataset["criteria"], output_dir, seed=cfg.split.seed)
+        model = train_bi_encoder(
+            dataset["sentences"],
+            dataset["criteria"],
+            output_dir,
+            seed=cfg.split.seed,
+            model_name=_cfg_get(cfg, "model.name"),
+        )
         build_per_post_index(model, dataset["sentences"], interim_dir, use_faiss=cfg.faiss.get("use_faiss", True))
     if build_sparse_m3:
         sparse_dir = Path(interim_dir) / "m3_sparse"

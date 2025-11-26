@@ -42,7 +42,13 @@ def index(cfg: str = "configs/bi.yaml") -> None:
     dataset = load_raw_dataset(Path(cfg_obj.data.raw_dir))
     exp = cfg_obj.get("exp", "debug")
     model_dir = Path(cfg_obj.get("output", f"outputs/runs/{exp}")) / "bi"
-    model = train_bi_encoder(dataset["sentences"], dataset["criteria"], model_dir, seed=cfg_obj.split.seed)
+    model = train_bi_encoder(
+        dataset["sentences"],
+        dataset["criteria"],
+        model_dir,
+        seed=cfg_obj.split.seed,
+        model_name=_cfg_get(cfg_obj, "model.name"),
+    )
     build_per_post_index(
         model,
         dataset["sentences"],

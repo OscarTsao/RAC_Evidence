@@ -35,6 +35,19 @@ Run everything at once with `make all`. The Typer CLI mirrors these steps: `pyth
 - Intermediate artifacts: `data/interim/` (retrieval, CE scores), `data/processed/` (splits, graphs).
 - Groundtruth reference files live under `data/groundtruth/` and `data/DSM5/` (kept intact).
 
+### Directory Structure
+- `data/raw/` - Demo/test dataset (small sample for development)
+- `data/raw_real/` - Full production dataset (when available)
+- `data/interim/` - Pipeline artifacts for demo data (indexes, retrievals, CE scores)
+- `data/interim_real/` - Pipeline artifacts for production data
+- `data/processed/` - Train/dev/test splits
+- `data/external/` - External resources (symptom co-occurrence matrices)
+- `data/groundtruth/` - Reference groundtruth files for validation
+- `data/DSM5/` - DSM-5 criteria definitions
+- `data/redsm5/` - Original ReDSM5 dataset files
+
+**Note**: The `_real` suffix indicates production data paths. Use `configs/*_real.yaml` when working with the full dataset, and default configs for demo/development.
+
 Example JSONL row:
 ```json
 {"post_id": "p1", "sent_id": "s1", "cid": "c1", "label": 1, "rationale": "mentions sad and sleep"}
@@ -69,6 +82,11 @@ Outputs land in `outputs/runs/<exp>/metrics.json` plus `cfg/`, `checkpoints/`, `
 - Dynamic padding via the collator; FP16 toggles available in configs.
 - Add optional features under `src/clinrac/features` (negation, temporal cues) and extend `graph/build_graph.py`.
 - Optuna and MLflow storage are provided at repo root (`optuna.db`, `mlruns/`).
+
+## Retrieval K Selection
+- Default serving K (`k_infer_default`) is the smallest value that clears recall/coverage gates; per-criterion overrides bump K only when needed.
+- Training uses a larger `k_train` (100) for hard-negative mining; serving stays lean to keep CE/GNN cost low.
+- Selection workflow: run `scripts/sweep_recall.sh` → `scripts/select_k.sh` to write `selected_k.json` and update `configs/retrieval/runtime.yaml`; optional retriever fine-tune runs only if gates cannot be met within the K grid.
 
 ## Performance Optimizations
 

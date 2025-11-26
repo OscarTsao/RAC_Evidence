@@ -1,4 +1,4 @@
-exp: demo
+exp: cross_encoder_pc
 seed: 42
 
 # MLflow experiment tracking
@@ -7,34 +7,25 @@ experiment_name: ${exp}
 
 # Optuna HPO settings
 hpo_n_trials: 50
-optuna_storage: sqlite:///optuna.db
+optuna_storage: sqlite:///./optuna.db
 
 data:
   raw_dir: data/raw
-  interim_dir: data/interim
-  processed_dir: data/processed
   chunk_max_len: 512
-  stride: 128
-retrieve:
-  topK: 50
-rerank:
-  keep_topk: 10
-  agg: max
-  topm: 2
-loss:
-  bce_pos_weight: 2.0
-  ranking_gamma: 0.5
-  ranking_margin: 0.2
+
 train:
-  lr: 1e-3
-  batch_size: 8
-  epochs: 2
-  use_amp: true
-  amp_dtype: bf16
+  lr: 1e-5
+  batch_size: 32
+  epochs: 10
+  warmup_steps: 500
+  fp16: true
+  patience: 5
   grad_accum: 1
-  shuffle: true
-dataloader:
-  num_workers: 4
-  pin_memory: true
-  persistent_workers: true
-  prefetch_factor: 2
+
+model_name: microsoft/deberta-v3-base
+max_length: 512
+num_workers: 4
+pin_memory: true
+persistent_workers: true
+prefetch_factor: 2
+device: cuda

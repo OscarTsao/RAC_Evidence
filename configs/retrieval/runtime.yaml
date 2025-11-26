@@ -1,0 +1,55 @@
+# Runtime configuration for Evidence RAC pipeline
+# Specifies K values and retrieval policies for training and inference
+
+retrieval:
+  scope: same_post              # STRICT: Only same-post candidates
+  fusion_mode: hybrid_m3        # BGE-M3 dense + sparse fusion
+  k_infer_default: 20           # Default K for inference/serving (STRICT)
+  k_train: 100                  # K for mining hard negatives during training
+  min_with_post_len: true       # Cap K at post length
+  tri_rrf_enable: false         # Disable 3-way RRF (use native hybrid instead)
+
+  # Per-criterion K overrides for inference
+  # Add {cid: 30} if that criterion fails Recall@20 gate
+  k_infer_overrides: {}
+
+  # Tie-breaking policy (must be deterministic)
+  tie_breaker: score_then_id    # Sort by (-score, sent_id)
+
+evidence_training:
+  neg_source: hybrid            # Hybrid negative sampling strategy
+  hard_negative_topk: 100       # Use Top-100 from retrieval for hard negatives
+  m_neg_per_pos: 6              # 6 negatives per positive (1:4 pos:neg in batch)
+
+  # Negative sampling fractions
+  hard_frac: 0.8                # 80% from same-post Top-K hard
+  random_frac: 0.1              # 10% random same-post
+  xpost_frac: 0.1               # 10% cross-post SAFE (desired)
+  xpost_max_frac: 0.2           # STRICT cap at 20% (xpost_neg_frac ≤ 0.2)
+
+  batch_pos_neg_ratio: "1:4"    # Positive:negative ratio in batches
+
+calibration:
+  method: temperature_scaling   # Per-fold temperature scaling
+  inner_dev_ratio: 0.1          # 10% of train split for temperature fitting
+  optimizer: lbfgs              # Optimizer for temperature fitting
+
+quality_gates:
+  # Retrieval gates
+  retrieval_recall_20_overall: 0.95    # Overall Recall@20 >= 0.95
+  retrieval_recall_20_per_crit: 0.90   # Per-criterion Recall@20 >= 0.90
+
+  # Evidence CE gates
+  evidence_auprc: 0.75          # AUPRC >= 0.75
+  evidence_f1: 0.70             # F1 >= 0.70
+  evidence_precision_5: 0.85    # Precision@5 >= 0.85
+  evidence_coverage_5: 0.80     # Coverage@5 >= 0.80
+  evidence_ece: 0.10            # ECE <= 0.10
+
+  # Calibration gates
+  calibration_improvement: 0.20 # ECE improvement >= 20% if initial ECE > 0.05
+
+environment:
+  seed: 42
+  deterministic: true           # Enforce deterministic behavior
+  log_level: INFO

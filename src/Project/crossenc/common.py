@@ -1,118 +1,88 @@
-"""Shared utilities for the lightweight cross-encoder."""
+"""Common cross-encoder components for inference."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence
+from typing import List, Optional
 
 import torch
-from torch import amp, nn
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
-
-from Project.dataio.loaders import PairDataset, PairExample, collate_pairwise_ce, resolve_tokenizer
-from Project.utils.seed import set_seed
+import torch.nn as nn
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 
 class CrossEncoder(nn.Module):
-    """Minimal transformer-like encoder using embeddings + mean pooling."""
+    """Simple cross-encoder wrapper for sequence classification.
 
-    def __init__(self, vocab_size: int = 60000, hidden_size: int = 128) -> None:
+    This is a lightweight wrapper around AutoModelForSequenceClassification
+    for binary classification tasks (sentence-criterion and post-criterion matching).
+    """
+
+    def __init__(
+        self,
+        model_name: str = "microsoft/deberta-v3-base",
+        num_labels: int = 1,
+        device: Optional[str] = None,
+    ):
         super().__init__()
-        self.emb = nn.Embedding(vocab_size, hidden_size)
-        self.encoder = nn.Linear(hidden_size, hidden_size)
-        self.classifier = nn.Linear(hidden_size, 1)
+        self.model_name = model_name
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_name, num_labels=num_labels
+        )
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-        x = self.emb(input_ids)
-        mask = attention_mask.unsqueeze(-1)
-        x = x * mask
-        summed = x.sum(dim=1)
-        denom = mask.sum(dim=1).clamp(min=1)
-        pooled = summed / denom
-        hidden = torch.relu(self.encoder(pooled))
-        return self.classifier(hidden).squeeze(-1)
-
-
-@dataclass
-class TrainingConfig:
-    lr: float = 1e-3
-    epochs: int = 1
-    batch_size: int = 8
-    max_length: int = 256
-    seed: int = 42
-    use_amp: bool = False  # Enable mixed precision training
-    amp_dtype: str = "bf16"  # bf16 | fp16 | fp32
-
-
-def train_model(
-    examples: Sequence[PairExample],
-    cfg: TrainingConfig,
-    tokenizer: Optional[object] = None,
-) -> CrossEncoder:
-    """Train a tiny cross-encoder on provided examples with optional mixed precision."""
-    set_seed(cfg.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = CrossEncoder().to(device)
-    tk = resolve_tokenizer(tokenizer)
-    ds = PairDataset(examples)
-    loader = DataLoader(
-        ds,
-        batch_size=cfg.batch_size,
-        shuffle=True,
-        collate_fn=lambda b: collate_pairwise_ce(b, tokenizer=tk, max_length=cfg.max_length),
-    )
-    opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
-    bce = nn.BCEWithLogitsLoss()
-
-    amp_dtype = cfg.amp_dtype.lower()
-    use_amp = cfg.use_amp and device.type == "cuda" and amp_dtype in ("bf16", "fp16")
-    autocast_dtype = torch.bfloat16 if amp_dtype == "bf16" else torch.float16
-    scaler = amp.GradScaler("cuda", enabled=use_amp and amp_dtype == "fp16")
-
-    model.train()
-    for _ in range(cfg.epochs):
-        for batch in loader:
-            # Move batch to device
-            batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-
-            opt.zero_grad(set_to_none=True)  # More efficient than zero_grad()
-
-            # Mixed precision forward pass
-            with amp.autocast("cuda", enabled=use_amp, dtype=autocast_dtype if use_amp else None):
-                logits = model(batch["input_ids"], batch["attention_mask"])
-                loss = bce(logits, batch["labels"])
-
-            if scaler.is_enabled():
-                scaler.scale(loss).backward()
-                scaler.step(opt)
-                scaler.update()
-            else:
-                loss.backward()
-                opt.step()
-
-    return model
+    def forward(self, input_ids, attention_mask):
+        """Forward pass returning logits."""
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        return outputs.logits.squeeze(-1)
 
 
 def predict(
     model: CrossEncoder,
-    examples: Iterable[PairExample],
-    tokenizer: Optional[object],
-    max_length: int,
-    batch_size: int = 16,
+    examples: List,
+    tokenizer: Optional[AutoTokenizer] = None,
+    max_length: int = 512,
+    batch_size: int = 32,
 ) -> List[float]:
+    """Run inference on examples and return logits.
+
+    Args:
+        model: CrossEncoder model instance
+        examples: List of PairExample objects with .text and .criterion attributes
+        tokenizer: Optional tokenizer (will create from model_name if None)
+        max_length: Maximum sequence length
+        batch_size: Batch size for inference
+
+    Returns:
+        List of logit scores (float)
+    """
+    if tokenizer is None:
+        tokenizer = AutoTokenizer.from_pretrained(model.model_name, use_fast=True)
+
     model.eval()
-    tk = resolve_tokenizer(tokenizer)
-    ds = PairDataset(list(examples))
-    loader = DataLoader(
-        ds,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=lambda b: collate_pairwise_ce(b, tokenizer=tk, max_length=max_length),
-    )
-    preds: List[float] = []
+    all_logits = []
+
     with torch.no_grad():
-        for batch in loader:
-            logits = model(batch["input_ids"], batch["attention_mask"])
-            preds.extend(logits.tolist())
-    return preds
+        for i in range(0, len(examples), batch_size):
+            batch = examples[i : i + batch_size]
+
+            # Pair text with criterion
+            texts = [f"{ex.text} [SEP] {ex.criterion}" for ex in batch]
+
+            # Tokenize
+            encoded = tokenizer(
+                texts,
+                padding=True,
+                truncation=True,
+                max_length=max_length,
+                return_tensors="pt",
+            )
+
+            # Move to device
+            input_ids = encoded["input_ids"].to(model.device)
+            attention_mask = encoded["attention_mask"].to(model.device)
+
+            # Forward pass
+            logits = model(input_ids, attention_mask)
+            all_logits.extend(logits.cpu().tolist())
+
+    return all_logits

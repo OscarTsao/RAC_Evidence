@@ -59,3 +59,9 @@ data/groundtruth/evidence_sentence_groundtruth.csv
 
 # Local assistant config
 .claude/
+
+# Interim data (generated files)
+data/interim_real/per_post_index.pkl
+data/interim_real/retrieval_sc.jsonl
+data/interim_real/m3_sparse/
+

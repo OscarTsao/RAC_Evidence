@@ -1,4 +1,5 @@
 exp: demo
+seed: 42
 
 # MLflow experiment tracking
 mlflow_tracking_uri: file:./mlruns
@@ -6,7 +7,7 @@ experiment_name: ${exp}
 
 # Optuna HPO settings
 hpo_n_trials: 50
-optuna_storage: sqlite:///optuna.db
+optuna_storage: sqlite:///./optuna.db
 
 data:
   raw_dir: data/raw
@@ -38,3 +39,8 @@ train:
   epochs: 3
   use_amp: true
   amp_dtype: bf16
+
+dataloader:
+  num_workers: 2  # Lower than CE due to graph memory requirements
+  pin_memory: true
+  persistent_workers: true

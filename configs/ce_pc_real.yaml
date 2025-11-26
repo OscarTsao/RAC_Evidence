@@ -1,0 +1,19 @@
+exp: real_dev
+seed: 42
+
+data:
+  raw_dir: data/raw_real
+  interim_dir: data/interim_real
+  processed_dir: data/processed
+  chunk_max_len: 512
+  stride: 128
+
+train:
+  lr: 1e-3
+  batch_size: 32
+  epochs: 100
+  patience: 20
+  use_amp: true
+  amp_dtype: bf16
+  grad_accum: 1
+  shuffle: true
