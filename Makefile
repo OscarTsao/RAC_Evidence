@@ -2,34 +2,54 @@ PYTHON ?= python
 EXP ?= demo
 MAMBA ?= mamba
 DEV_MANIFEST ?=
+DATA_CFG ?= configs/dataset.yaml
 BI_CFG ?= configs/bi.yaml
 CE_SC_CFG ?= configs/ce_sc.yaml
 CE_PC_CFG ?= configs/ce_pc.yaml
+CALIBRATE_CFG ?= configs/calibrate.yaml
+GRAPH_CFG ?= configs/graph.yaml
+EVAL_CFG ?= configs/evaluate.yaml
 RERANKER_CFG ?= configs/evidence_reranker.yaml
 RUNTIME_CFG ?= configs/retrieval/runtime.yaml
 export PYTHONPATH := src
 export LD_LIBRARY_PATH := $(CONDA_PREFIX)/lib:$(LD_LIBRARY_PATH)
 
-.PHONY: help
+.PHONY: help setup prepare index retrieve sweep_recall select_k retriever_ft \
+	train_ce_sc train_ce_pc calibrate infer infer_sc infer_pc train_evidence \
+	train_evidence_5fold acceptance_checks sc_5fold sc_5fold_dry build_graph \
+	train_gnn evaluate test real_dev_index real_dev_retrieve real_dev_sweep \
+	real_dev_select_k real_dev_train_5fold real_dev_sc_5fold real_dev_sc_5fold_dry \
+	real_dev_acceptance real_dev_full_pipeline all
+
 help:
 	@echo "==================================================================="
-	@echo "  RAC Evidence Pipeline - Available Commands"
+	@echo "  clin-gnn-rac - Available Commands"
 	@echo "==================================================================="
 	@echo ""
-	@echo "Setup:"
+	@echo "Setup & data:"
 	@echo "  make setup              Install dependencies"
-	@echo "  make prepare            Prepare dataset"
+	@echo "  make prepare            Prepare dataset splits ($(DATA_CFG))"
 	@echo ""
-	@echo "Retrieval:"
-	@echo "  make index              Build FAISS index"
+	@echo "Main pipeline (EXP=$(EXP)):"
+	@echo "  make index              Train retriever + build indexes"
 	@echo "  make retrieve           Retrieve top-K candidates"
-	@echo "  make sweep_recall       Sweep K values for recall"
-	@echo "  make select_k           Select optimal K per criterion"
+	@echo "  make train_ce_sc        Train sentence-criterion cross-encoder"
+	@echo "  make train_ce_pc        Train post-criterion cross-encoder"
+	@echo "  make infer              Run CE inference (SC + PC)"
+	@echo "  make calibrate          Fit temperature scaling from inference outputs"
+	@echo "  make build_graph        Build heterogeneous graphs"
+	@echo "  make train_gnn          Train heterogeneous GNN"
+	@echo "  make evaluate           Run quality gates"
+	@echo "  make test               Run pytest suite"
 	@echo ""
-	@echo "Evidence Training:"
+	@echo "Retrieval tuning:"
+	@echo "  make sweep_recall       Sweep K values for recall"
+	@echo "  make select_k           Select K and update runtime config"
+	@echo ""
+	@echo "STRICT 5-fold evidence pipeline:"
 	@echo "  make train_evidence_5fold    Train 5-fold Evidence CE"
-	@echo "  make sc_5fold                STRICT 5-fold pipeline (recommended)"
-	@echo "  make sc_5fold_dry            Dry run for testing"
+	@echo "  make sc_5fold                Run STRICT pipeline"
+	@echo "  make sc_5fold_dry            Dry run for STRICT pipeline"
 	@echo "  make acceptance_checks       Run quality gates"
 	@echo ""
 	@echo "Real Dev Shortcuts (EXP=real_dev):"
@@ -40,11 +60,6 @@ help:
 	@echo "  make real_dev_acceptance     Check quality gates for real_dev"
 	@echo "  make real_dev_full_pipeline  Run complete pipeline for real_dev"
 	@echo ""
-	@echo "Parameters (can override):"
-	@echo "  EXP=<name>                   Experiment name (default: demo)"
-	@echo "  BI_CFG=<path>                Bi-encoder config (default: configs/bi.yaml)"
-	@echo "  RERANKER_CFG=<path>          Reranker config (default: configs/evidence_reranker.yaml)"
-	@echo ""
 	@echo "==================================================================="
 
 setup:
@@ -53,7 +68,7 @@ setup:
 	pip install -e '.[dev,retrieval]'
 
 prepare:
-	$(PYTHON) scripts/prepare_data.py --cfg configs/dataset.yaml
+	$(PYTHON) scripts/prepare_data.py --cfg $(DATA_CFG)
 
 index:
 	$(PYTHON) scripts/build_index.py --cfg $(BI_CFG)
@@ -76,6 +91,17 @@ train_ce_sc:
 
 train_ce_pc:
 	$(PYTHON) scripts/train_ce_pc.py --cfg $(CE_PC_CFG)
+
+calibrate:
+	$(PYTHON) scripts/calibrate.py --cfg $(CALIBRATE_CFG)
+
+infer: infer_sc infer_pc
+
+infer_sc:
+	$(PYTHON) scripts/infer_ce_sc.py --cfg $(CE_SC_CFG)
+
+infer_pc:
+	$(PYTHON) scripts/infer_ce_pc.py --cfg $(CE_PC_CFG)
 
 train_evidence:
 	PYTHONPATH=src $(PYTHON) scripts/train_bge_reranker.py --cfg $(RERANKER_CFG) --runtime_cfg $(RUNTIME_CFG) --exp $(EXP)
@@ -108,13 +134,13 @@ sc_5fold_dry:
 	bash scripts/sc_5fold.sh --exp $(EXP) --dry_run
 
 build_graph:
-	$(PYTHON) scripts/build_graph.py --cfg configs/graph.yaml
+	$(PYTHON) scripts/build_graph.py --cfg $(GRAPH_CFG)
 
 train_gnn:
-	$(PYTHON) scripts/train_graph.py --cfg configs/graph.yaml
+	$(PYTHON) scripts/train_graph.py --cfg $(GRAPH_CFG)
 
 evaluate:
-	$(PYTHON) scripts/evaluate.py --cfg configs/evaluate.yaml
+	$(PYTHON) scripts/evaluate.py --cfg $(EVAL_CFG)
 
 test:
 	pytest -q
@@ -154,4 +180,4 @@ real_dev_full_pipeline:
 	$(MAKE) real_dev_train_5fold
 	$(MAKE) real_dev_acceptance
 
-all: prepare index retrieve train_ce_sc train_ce_pc calibrate infer build_graph train_gnn evaluate
+all: prepare index retrieve train_ce_sc train_ce_pc infer calibrate build_graph train_gnn evaluate
