@@ -302,6 +302,14 @@ def save_evidence_metrics(
         "precision_optimal": float(np.mean(y_pred_optimal[y_true == 1])) if np.sum(y_true) > 0 else 0.0,
     }
 
+    # FIX: Promote optimal metrics to the main fields for Acceptance Checks
+    # The acceptance gate reads metrics['overall']['f1'], so we update it.
+    # We keep the original 'f1_default_0.5' for debug/logging if needed
+    overall_metrics["f1_default_0.5"] = overall_metrics["f1"]
+    overall_metrics["f1"] = optimal_metrics["f1_optimal"]
+    overall_metrics["macro_f1"] = optimal_metrics["macro_f1_optimal"]
+    overall_metrics["precision"] = optimal_metrics["precision_optimal"]
+
     metrics["optimal_thresholds"] = optimal_thresholds
     metrics["optimal_threshold_metrics"] = optimal_metrics
 

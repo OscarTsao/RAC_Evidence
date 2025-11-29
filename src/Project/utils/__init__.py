@@ -2,6 +2,18 @@
 
 import torch
 
+# Lazy imports for optional dependencies
+__all__ = ["enable_performance_optimizations", "NotionSync", "sync_all_results"]
+
+
+def __getattr__(name: str):
+    """Lazy import for optional Notion utilities."""
+    if name in ("NotionSync", "sync_all_results"):
+        from Project.utils.notion_utils import NotionSync, sync_all_results
+
+        return {"NotionSync": NotionSync, "sync_all_results": sync_all_results}[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 def enable_performance_optimizations():
     """Enable PyTorch performance optimizations.

@@ -3,38 +3,54 @@ data:
   raw_dir: data/raw_real
   interim_dir: data/interim_real
   retrieval_path: ${data.interim_dir}/retrieval_sc.jsonl
+  context_mode: none  # Context mode: 'none' or 'neighbors1'
+  sent_max_len: 256   # Max sentence length (used by context mode)
 model:
   name: BAAI/bge-reranker-v2-m3
   max_length: 384
   lora:
     enabled: true
     r: 16
-    alpha: 32
-    dropout: 0.1
+    alpha: 16
+    dropout: 0.086
 train:
   top_k_train: 100              # K for mining hard negatives during training
   top_k_infer: 20               # K for inference/serving (STRICT)
-  neg_per_pos: 6                # 1:4 pos:neg ratio with 6 negatives per positive
+  neg_per_pos: 8                # 1:8 pos:neg ratio (HPO optimized)
   # Negative sampling ratios (must sum to 1.0)
   hard_neg_ratio: 0.8  # 80% from retrieval Top-K (same-post)
-  random_neg_ratio: 0.1  # 10% random same-post
-  cross_post_ratio: 0.1  # 10% cross-post SAFE (labels_pc==0)
+  random_neg_ratio: 0.023  # ~2% random same-post
+  cross_post_ratio: 0.177  # ~18% cross-post SAFE (HPO optimized)
   xpost_max_frac: 0.2  # Cap cross-post at 20% max (strict guard)
   epoch_refresh: false  # Refresh hard negatives each epoch
   n_folds: 5  # Number of cross-validation folds
-  batch_size: 8
+  batch_size: 16
   gradient_accumulation: 4
-  lr: 1.5e-5
+  lr: 2.395e-05
   weight_decay: 0.01
-  epochs: 2
+  epochs: 3
   warmup_ratio: 0.06
   max_steps: null
   eval_steps: 500
-  save_steps: 500
+  save_steps: 10000            # Disable intermediate checkpoints (set very high)
+  save_strategy: epoch         # Only save at epoch end
+  save_total_limit: 1          # Keep only best model (saves disk space)
+  load_best_model_at_end: true # Load best model for final inference
   bf16: true
   fp16: false
   logging_steps: 50
   grad_clip: 1.0
+  # Loss settings (HPO optimized for bce_ranking)
+  loss_type: bce_ranking         # Loss type: 'bce', 'focal', or 'bce_ranking'
+
+  # Focal loss params (used if loss_type == "focal")
+  focal_alpha: 0.75              # Alpha for focal loss (class weight, 0.75 for positive class)
+  focal_gamma: 2.0               # Gamma for focal loss (focusing parameter, higher = more focus on hard examples)
+
+  # BCE ranking loss params (HPO optimized)
+  rank_weight: 0.488             # Weight for ranking component
+  rank_margin: 0.391             # Margin for ranking loss
+  pos_weight_scale: 1.352        # Scale factor for positive class weight in BCE
 seed: 42
 output_dir: outputs/runs/${exp}/reranker
 ks_sensitivity: [20, 30, 50]

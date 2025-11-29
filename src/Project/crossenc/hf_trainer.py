@@ -93,6 +93,7 @@ def _train_fold(
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=1)
     if torch.cuda.is_available():
+        model = model.cuda()  # Explicitly move model to GPU
         torch.set_float32_matmul_precision("high")
     ds = [{"text": t, "label": l} for t, l in zip(texts, labels)]
     train_ds, eval_ds = train_test_split(ds, test_size=0.1, random_state=fold, stratify=labels)
@@ -104,7 +105,7 @@ def _train_fold(
             max_length=int(_cfg_get(cfg, "data.max_length", 256)),
             padding=False,
         )
-        enc["labels"] = batch["label"]
+        enc["labels"] = float(batch["label"])
         return enc
 
     import datasets
@@ -122,19 +123,22 @@ def _train_fold(
         weight_decay=float(_cfg_get(cfg, "train.weight_decay", 0.01)),
         num_train_epochs=float(_cfg_get(cfg, "train.epochs", 2)),
         warmup_ratio=float(_cfg_get(cfg, "train.warmup_ratio", 0.06)),
-        max_steps=_cfg_get(cfg, "train.max_steps"),
+        max_steps=int(_cfg_get(cfg, "train.max_steps", -1)),
         logging_steps=int(_cfg_get(cfg, "train.logging_steps", 50)),
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=int(_cfg_get(cfg, "train.eval_steps", 200)),
-        save_steps=int(_cfg_get(cfg, "train.save_steps", 200)),
+        save_steps=int(_cfg_get(cfg, "train.save_steps", 2000)),  # Save less frequently
+        save_total_limit=3,  # Keep only 3 best checkpoints
         load_best_model_at_end=True,
         metric_for_best_model="macro_f1",
         greater_is_better=True,
+        no_cuda=False,  # Explicitly enable CUDA
         bf16=bool(_cfg_get(cfg, "train.bf16", True)),
         fp16=bool(_cfg_get(cfg, "train.fp16", False)),
-        gradient_checkpointing=True,
-        dataloader_num_workers=4,
+        gradient_checkpointing=bool(_cfg_get(cfg, "train.gradient_checkpointing", False)),  # Disable by default
+        dataloader_num_workers=int(_cfg_get(cfg, "train.num_workers", 8)),  # Increase workers
         dataloader_pin_memory=True,
+        dataloader_prefetch_factor=2,
         report_to=[],
         max_grad_norm=float(_cfg_get(cfg, "train.grad_clip", 1.0)),
     )

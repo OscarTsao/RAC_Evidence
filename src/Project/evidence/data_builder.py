@@ -52,6 +52,7 @@ class EvidenceDataBuilder:
         xpost_max_frac: float = 0.2,
         seed: int = 42,
         epoch_refresh: bool = False,
+        context_mode: str = "none",
     ):
         """Initialize data builder.
 
@@ -69,6 +70,7 @@ class EvidenceDataBuilder:
             xpost_max_frac: Max fraction of cross-post negatives allowed (default 0.2 = 20%)
             seed: Random seed
             epoch_refresh: Whether to refresh hard negatives each epoch
+            context_mode: Context mode ('none' or 'neighbors1')
         """
         self.sentences = sentences
         self.criteria = criteria
@@ -82,6 +84,7 @@ class EvidenceDataBuilder:
         self.cross_post_ratio = cross_post_ratio
         self.xpost_max_frac = xpost_max_frac
         self.epoch_refresh = epoch_refresh
+        self.context_mode = context_mode
         self.seed = seed
         self.rng = random.Random(seed)
         self.logger = get_logger(__name__)
@@ -112,6 +115,13 @@ class EvidenceDataBuilder:
         for s in sentences:
             self.sents_by_post[s.post_id].append(s)
 
+        # Build post texts lookup for context mode
+        self.post_texts: Dict[str, str] = {}
+        for post_id, sents in self.sents_by_post.items():
+            # Sort by sent_id to reconstruct post order
+            sorted_sents = sorted(sents, key=lambda x: x.sent_id)
+            self.post_texts[post_id] = " ".join(s.text for s in sorted_sents)
+
         # Build positive set
         self.positives: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
         for lab in labels_sc:
@@ -123,6 +133,65 @@ class EvidenceDataBuilder:
         for lab in labels_pc:
             if lab.label == 0:
                 self.cross_post_safe[lab.cid].add(lab.post_id)
+
+    def _add_context(self, post_id: str, sent_id: str, text: str) -> str:
+        """Add context to sentence based on context_mode.
+
+        Args:
+            post_id: Post ID
+            sent_id: Sentence ID (string)
+            text: Original sentence text
+
+        Returns:
+            Text with context if context_mode is enabled, otherwise original text
+        """
+        if self.context_mode == "none":
+            return text
+
+        if self.context_mode == "neighbors1":
+            import re
+
+            # Get all sentences for this post
+            post_text = self.post_texts.get(post_id, "")
+            if not post_text:
+                return text
+
+            # Split post into sentences using the same pattern as groundtruth generation
+            pattern = r'([.!?]+\s+)'
+            parts = re.split(pattern, post_text)
+            sentences = []
+            for i in range(0, len(parts), 2):
+                if i < len(parts):
+                    sent = parts[i]
+                    if i + 1 < len(parts):
+                        sent += parts[i + 1]
+                    sentences.append(sent.strip())
+
+            # Convert sent_id to int for indexing
+            try:
+                sent_idx = int(sent_id)
+            except (ValueError, TypeError):
+                return text
+
+            # Find current sentence
+            if sent_idx >= len(sentences) or sent_idx < 0:
+                return text
+
+            # Get previous and next
+            prev_text = sentences[sent_idx - 1] if sent_idx > 0 else ""
+            next_text = sentences[sent_idx + 1] if sent_idx + 1 < len(sentences) else ""
+
+            # Build context
+            parts = []
+            if prev_text:
+                parts.append(prev_text)
+            parts.append(text)
+            if next_text:
+                parts.append(next_text)
+
+            return " [SEP] ".join(parts)
+
+        return text
 
     def refresh_seed(self, epoch: int) -> None:
         """Refresh random seed for epoch-wise hard negative sampling.
@@ -175,12 +244,13 @@ class EvidenceDataBuilder:
                 for sent_id in pos_sents:
                     sent = self.sent_lookup.get((post_id, sent_id))
                     if sent:
+                        text_with_context = self._add_context(post_id, sent_id, sent.text)
                         examples.append(
                             SCExample(
                                 post_id=post_id,
                                 sent_id=sent_id,
                                 cid=cid,
-                                text=sent.text,
+                                text=text_with_context,
                                 criterion=crit_desc,
                                 label=1,
                                 source="positive",
@@ -230,12 +300,13 @@ class EvidenceDataBuilder:
 
                 # Add negative examples
                 for sent, source in negatives:
+                    text_with_context = self._add_context(post_id, sent.sent_id, sent.text)
                     examples.append(
                         SCExample(
                             post_id=post_id,
                             sent_id=sent.sent_id,
                             cid=cid,
-                            text=sent.text,
+                            text=text_with_context,
                             criterion=crit_desc,
                             label=0,
                             source=source,
@@ -309,12 +380,13 @@ class EvidenceDataBuilder:
                         )
                         continue
 
+                    text_with_context = self._add_context(post_id, sent.sent_id, sent.text)
                     examples.append(
                         SCExample(
                             post_id=post_id,
                             sent_id=sent.sent_id,
                             cid=cid,
-                            text=sent.text,
+                            text=text_with_context,
                             criterion=crit_desc,
                             label=1 if sent_id in positive_sents else 0,
                             source="retrieval",
@@ -400,6 +472,7 @@ def load_evidence_data(
     xpost_max_frac: float = 0.2,
     seed: int = 42,
     epoch_refresh: bool = False,
+    context_mode: str = "none",
 ) -> EvidenceDataBuilder:
     """Load data and create evidence data builder.
 
@@ -414,6 +487,7 @@ def load_evidence_data(
         xpost_max_frac: Max fraction of cross-post negatives (default 0.2 = 20%)
         seed: Random seed
         epoch_refresh: Whether to refresh hard negatives each epoch
+        context_mode: Context mode ('none' or 'neighbors1')
 
     Returns:
         EvidenceDataBuilder instance
@@ -449,6 +523,7 @@ def load_evidence_data(
         xpost_max_frac=xpost_max_frac,
         seed=seed,
         epoch_refresh=epoch_refresh,
+        context_mode=context_mode,
     )
 
     logger.info(
