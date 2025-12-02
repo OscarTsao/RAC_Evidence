@@ -20,6 +20,20 @@ from Project.utils.io import read_jsonl
 from Project.utils.logging import get_logger
 
 
+def _load_ground_truth_labels(labels_path: Path) -> Dict[Tuple[str, str], int]:
+    """Load ground truth PC labels from labels_pc.jsonl.
+
+    Returns:
+        Dict mapping (post_id, cid) -> label (0 or 1)
+    """
+    labels_data = read_jsonl(labels_path)
+    labels_dict = {}
+    for item in labels_data:
+        key = (item["post_id"], item["cid"])
+        labels_dict[key] = int(item["label"])
+    return labels_dict
+
+
 def _load_bge_model(model_name: str = "BAAI/bge-m3"):
     """Load BGE-M3 model for embedding extraction."""
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -118,6 +132,7 @@ def _build_post_graph(
     retrieval_lookup: Dict,
     sent_id_to_idx: Dict[str, int],
     cid_to_idx: Dict[str, int],
+    labels_pc_gt: Dict[Tuple[str, str], int],
 ) -> HeteroData:
     """Build heterogeneous graph for a single post with semantic embeddings."""
     data = HeteroData()
@@ -142,12 +157,12 @@ def _build_post_graph(
     data["post"].x = data["sentence"].x.mean(dim=0, keepdim=True)
     data["post"].num_nodes = 1
 
-    # Criterion labels from PC scores
+    # Criterion labels from ground truth
     criterion_labels = []
     for c in criteria:
-        pc_key = f"{post_id}_{c['cid']}"
-        pc_prob = pc_scores.get(pc_key, {}).get("prob_cal", 0.0)
-        criterion_labels.append(1.0 if pc_prob >= 0.5 else 0.0)
+        gt_key = (post_id, c['cid'])
+        gt_label = labels_pc_gt.get(gt_key, 0)  # Default to 0 if not found
+        criterion_labels.append(float(gt_label))
     data["criterion"].y = torch.tensor(criterion_labels, dtype=torch.float)
 
     # Build S-C edges (sentence -> criterion) using top-K selections
@@ -218,7 +233,7 @@ def _build_post_graph(
         [[0] * num_sent, list(range(num_sent))], dtype=torch.long
     )
 
-    # Build P-C edges (post matches criterion) from PC scores
+    # Build P-C edges (post matches criterion) with ground truth labels
     pc_edge_src = []
     pc_edge_dst = []
     pc_edge_attr = []
@@ -234,7 +249,10 @@ def _build_post_graph(
                 float(pc_score.get("logit", 0.0)),
                 float(pc_score.get("prob_cal", 0.0))
             ])
-            pc_edge_label.append(1.0 if pc_score.get("label", 0) == 1 else 0.0)
+            # Use ground truth label instead of model prediction
+            gt_key = (post_id, c['cid'])
+            gt_label = labels_pc_gt.get(gt_key, 0)
+            pc_edge_label.append(float(gt_label))
 
     if pc_edge_attr:
         data[("post", "matches", "criterion")].edge_index = torch.tensor(
@@ -306,6 +324,15 @@ def build_hetero_graphs(cfg: DictConfig) -> Path:
     if not pc_scores:
         logger.warning("No PC scores found - will use placeholder values")
 
+    # Load ground truth PC labels
+    logger.info("Loading ground truth PC labels...")
+    processed_dir = Path(cfg.data.processed_dir)
+    labels_pc_path = processed_dir / "labels_pc.jsonl"
+    if not labels_pc_path.exists():
+        raise FileNotFoundError(f"Ground truth labels not found at {labels_pc_path}")
+    labels_pc_gt = _load_ground_truth_labels(labels_pc_path)
+    logger.info(f"Loaded {len(labels_pc_gt)} ground truth PC labels")
+
     # Extract embeddings for all sentences and criteria
     logger.info("Loading BGE-M3 model...")
     model_name = cfg.model.get("name", "BAAI/bge-m3")
@@ -340,6 +367,7 @@ def build_hetero_graphs(cfg: DictConfig) -> Path:
             retrieval_lookup,
             sent_id_to_idx,
             cid_to_idx,
+            labels_pc_gt,
         )
 
         if graph is not None:

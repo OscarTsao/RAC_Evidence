@@ -5,21 +5,24 @@ DEV_MANIFEST ?=
 DATA_CFG ?= configs/dataset.yaml
 BI_CFG ?= configs/bi.yaml
 CE_SC_CFG ?= configs/ce_sc.yaml
-CE_PC_CFG ?= configs/ce_pc.yaml
+CE_PC_V2_CFG ?= configs/ce_pc_v2.yaml
 CALIBRATE_CFG ?= configs/calibrate.yaml
 GRAPH_CFG ?= configs/graph.yaml
 EVAL_CFG ?= configs/evaluate.yaml
 RERANKER_CFG ?= configs/evidence_reranker.yaml
 RUNTIME_CFG ?= configs/retrieval/runtime.yaml
+PC_OOF_PATH ?= outputs/runs/real_dev_pc_v2/pc_oof.jsonl
+PC_METRICS_PATH ?= outputs/runs/real_dev_pc_v2/metrics.json
 export PYTHONPATH := src
 export LD_LIBRARY_PATH := $(CONDA_PREFIX)/lib:$(LD_LIBRARY_PATH)
 
 .PHONY: help setup prepare index retrieve sweep_recall select_k retriever_ft \
-	train_ce_sc train_ce_pc calibrate infer infer_sc infer_pc hpo_ce_sc hpo_ce_pc \
+	train_ce_sc train_pc_v2 calibrate infer infer_sc hpo_ce_sc \
 	train_evidence train_evidence_5fold acceptance_checks sc_5fold sc_5fold_dry \
 	build_graph train_gnn evaluate test real_dev_index real_dev_retrieve \
 	real_dev_sweep real_dev_select_k real_dev_train_5fold real_dev_sc_5fold \
-	real_dev_sc_5fold_dry real_dev_acceptance real_dev_full_pipeline all
+	real_dev_sc_5fold_dry real_dev_acceptance real_dev_full_pipeline \
+	eval_pc_v2 verify_pc_v2_data all
 
 help:
 	@echo "==================================================================="
@@ -34,9 +37,9 @@ help:
 	@echo "  make index              Train retriever + build indexes"
 	@echo "  make retrieve           Retrieve top-K candidates"
 	@echo "  make train_ce_sc        Train sentence-criterion cross-encoder"
-	@echo "  make train_ce_pc        Train post-criterion cross-encoder"
-	@echo "  make infer              Run CE inference (SC + PC)"
-	@echo "  make calibrate          Fit temperature scaling from inference outputs"
+	@echo "  make train_pc_v2        Train post-criterion cross-encoder (v2 strict CV)"
+	@echo "  make infer              Run CE inference (SC only)"
+	@echo "  make calibrate          Fit temperature scaling from inference outputs (SC)"
 	@echo "  make build_graph        Build heterogeneous graphs"
 	@echo "  make train_gnn          Train heterogeneous GNN"
 	@echo "  make evaluate           Run quality gates"
@@ -48,7 +51,6 @@ help:
 	@echo ""
 	@echo "Hyperparameter search:"
 	@echo "  make hpo_ce_sc          Optuna HPO for CE-SC (GPU-parallel)"
-	@echo "  make hpo_ce_pc          Optuna HPO for CE-PC (GPU-parallel)"
 	@echo ""
 	@echo "STRICT 5-fold evidence pipeline:"
 	@echo "  make train_evidence_5fold    Train 5-fold Evidence CE"
@@ -93,25 +95,19 @@ retriever_ft:
 train_ce_sc:
 	$(PYTHON) scripts/train_ce_sc.py --cfg $(CE_SC_CFG)
 
-train_ce_pc:
-	$(PYTHON) scripts/train_ce_pc.py --cfg $(CE_PC_CFG)
+train_pc_v2:
+	$(PYTHON) scripts/train_pc_v2.py --cfg $(CE_PC_V2_CFG)
 
 calibrate:
 	$(PYTHON) scripts/calibrate.py --cfg $(CALIBRATE_CFG)
 
-infer: infer_sc infer_pc
+infer: infer_sc
 
 infer_sc:
 	$(PYTHON) scripts/infer_ce_sc.py --cfg $(CE_SC_CFG)
 
-infer_pc:
-	$(PYTHON) scripts/infer_ce_pc.py --cfg $(CE_PC_CFG)
-
 hpo_ce_sc:
 	$(PYTHON) scripts/hpo_ce.py --cfg $(CE_SC_CFG) --task sc
-
-hpo_ce_pc:
-	$(PYTHON) scripts/hpo_ce.py --cfg $(CE_PC_CFG) --task pc
 
 train_evidence:
 	PYTHONPATH=src $(PYTHON) scripts/train_bge_reranker.py --cfg $(RERANKER_CFG) --runtime_cfg $(RUNTIME_CFG) --exp $(EXP)
@@ -190,4 +186,10 @@ real_dev_full_pipeline:
 	$(MAKE) real_dev_train_5fold
 	$(MAKE) real_dev_acceptance
 
-all: prepare index retrieve train_ce_sc train_ce_pc infer calibrate build_graph train_gnn evaluate
+eval_pc_v2:
+	PYTHONPATH=src $(PYTHON) scripts/eval_pc_v2.py --oof_path $(PC_OOF_PATH) --output_path $(PC_METRICS_PATH)
+
+verify_pc_v2_data:
+	$(PYTHON) scripts/verify_pc_v2_data.py
+
+all: prepare index retrieve train_ce_sc train_pc_v2 calibrate build_graph train_gnn evaluate

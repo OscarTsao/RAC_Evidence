@@ -1,0 +1,47 @@
+# PC v2 Training Configuration
+# Post-Criterion cross-encoder with strict 5-fold CV and calibration
+
+exp: real_dev_pc_v2
+seed: 42
+
+# Data paths
+data:
+  raw_dir: data/raw_real
+  interim_dir: data/interim_real
+  processed_dir: data/processed
+  posts_path: data/redsm5/redsm5_posts.csv
+  criteria_path: data/DSM5/MDD_Criteira.json
+  labels_path: data/processed/labels_pc.jsonl
+
+# Model configuration
+model:
+  name: BAAI/bge-reranker-v2-m3
+  max_length: 512  # CRITICAL: Full post context (not 384!)
+
+# Training hyperparameters (CONSERVATIVE to prevent collapse)
+train:
+  lr: 2.0e-5  # Conservative fine-tuning (NOT 1e-3!)
+  epochs: 3
+  batch_size: 16
+  gradient_accumulation: 4  # Effective batch size = 64
+  weight_decay: 0.01
+  warmup_ratio: 0.06
+  logging_steps: 50
+  eval_steps: 500
+  save_steps: 500
+  bf16: true
+  fp16: false
+
+# DataLoader optimization
+dataloader:
+  num_workers: 4
+  pin_memory: true
+
+# Cross-validation settings
+cv:
+  n_folds: 5
+  seed: 42
+  dev_ratio: 0.1  # 10% of train split for temperature calibration
+
+# Output directory
+output_dir: outputs/runs/real_dev_pc_v2
