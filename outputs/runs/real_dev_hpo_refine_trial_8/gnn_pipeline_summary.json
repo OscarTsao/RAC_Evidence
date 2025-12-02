@@ -1,0 +1,162 @@
+{
+  "pipeline_status": "technical_implementation_complete",
+  "evaluation_status": "blocked_missing_pc_labels",
+  "date": "2025-11-29",
+  "experiment": "real_dev_hpo_refine_trial_8",
+
+  "components": {
+    "evidence_model": {
+      "status": "completed",
+      "model": "BAAI/bge-reranker-v2-m3",
+      "oof_predictions": 90693,
+      "metrics": {
+        "macro_f1_calibrated": 0.756,
+        "f1_calibrated": 0.520,
+        "auprc": 0.437,
+        "coverage_at_5": 0.893,
+        "coverage_at_10": 0.960,
+        "coverage_at_20": 1.0
+      }
+    },
+
+    "graph_construction": {
+      "status": "completed",
+      "num_graphs": 1477,
+      "num_sentences": 29888,
+      "num_criteria": 9,
+      "num_posts": 1477,
+      "embedding_dim": 1024,
+      "embedding_model": "BAAI/bge-m3",
+      "topk_per_cid": 10,
+      "output_dir": "outputs/runs/real_dev/graphs",
+      "storage_format": "individual_files"
+    },
+
+    "hgt_model": {
+      "status": "trained",
+      "parameters": 342688,
+      "architecture": {
+        "layers": 2,
+        "hidden_channels": 64,
+        "out_channels": 128,
+        "num_heads": 4,
+        "dropout": 0.2
+      },
+      "training": {
+        "epochs": 3,
+        "batch_size_posts": 4,
+        "learning_rate": 0.001,
+        "use_amp": true,
+        "amp_dtype": "bf16",
+        "loss_weights": {
+          "lambda_edge": 1.0,
+          "lambda_node": 1.0,
+          "lambda_cons": 0.3
+        }
+      },
+      "training_metrics": {
+        "epoch_1": {
+          "total_loss": 0.1217,
+          "edge_loss": 0.0871,
+          "node_loss": 0.0088,
+          "consistency_loss": 0.0859
+        },
+        "epoch_2": {
+          "total_loss": 0.0815,
+          "edge_loss": 0.0537,
+          "node_loss": 0.0000,
+          "consistency_loss": 0.0927
+        },
+        "epoch_3": {
+          "total_loss": 0.0798,
+          "edge_loss": 0.0508,
+          "node_loss": 0.0000,
+          "consistency_loss": 0.0964
+        }
+      },
+      "model_path": "outputs/runs/real_dev/gnn/best_model.pt"
+    },
+
+    "evaluation": {
+      "status": "blocked",
+      "reason": "missing_pc_ground_truth_labels",
+      "metrics": {
+        "best_macro_f1": 1.0,
+        "note": "Trivial result - all labels are 0, all predictions are 0"
+      }
+    }
+  },
+
+  "technical_challenges_resolved": [
+    {
+      "issue": "HGTConv message passing dropped 'post' nodes",
+      "solution": "Explicitly preserved post embeddings before/after HGTConv"
+    },
+    {
+      "issue": "Batching shape mismatch for heterogeneous graphs",
+      "solution": "Used PyG batch indices to pair nodes within same graph"
+    },
+    {
+      "issue": "Memory efficiency for large graph datasets",
+      "solution": "Individual file storage with lazy loading"
+    },
+    {
+      "issue": "Edge feature normalization",
+      "solution": "StandardScaler for dense scores, inverse rank features"
+    }
+  ],
+
+  "files_created": {
+    "code": [
+      "src/Project/graph/build_hetero.py",
+      "src/Project/graph/hgt_model.py",
+      "src/Project/graph/train_hgt.py",
+      "src/Project/graph/dataset.py"
+    ],
+    "scripts": [
+      "scripts/build_heterograph.py",
+      "scripts/train_hgt.py"
+    ],
+    "outputs": [
+      "outputs/runs/real_dev/graphs/",
+      "outputs/runs/real_dev/gnn/best_model.pt",
+      "outputs/runs/real_dev/gnn/metrics.json",
+      "outputs/graph_build.log",
+      "outputs/hgt_training.log"
+    ],
+    "documentation": [
+      "PHASE4_GNN_SUMMARY.md",
+      "outputs/runs/real_dev/gnn_pipeline_summary.json"
+    ]
+  },
+
+  "next_steps": [
+    {
+      "priority": 1,
+      "action": "Train PC (post-criterion) classification layer",
+      "details": "Generate OOF predictions for post-level criteria to provide ground truth labels"
+    },
+    {
+      "priority": 2,
+      "action": "Rebuild graphs with PC scores",
+      "details": "Re-run graph construction with PC ground truth for criterion labels"
+    },
+    {
+      "priority": 3,
+      "action": "Retrain HGT model",
+      "details": "Train with meaningful supervision for node-level predictions"
+    },
+    {
+      "priority": 4,
+      "action": "Evaluate and compare to baseline",
+      "details": "Compare GNN performance vs CE baseline, target +0.02 macro-F1 improvement"
+    }
+  ],
+
+  "comparison_to_baseline": {
+    "evidence_ce_macro_f1": 0.756,
+    "gnn_macro_f1": "blocked_missing_labels",
+    "expected_improvement": 0.02,
+    "target_gnn_macro_f1": 0.776
+  }
+}

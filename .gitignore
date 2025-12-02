@@ -53,6 +53,17 @@ data/interim/*
 !data/interim/.gitkeep
 outputs/runs/*
 !outputs/runs/.gitkeep
+# Allow important metrics and summary files
+!outputs/runs/*/evidence_metrics.json
+!outputs/runs/*/gnn_pipeline_summary.json
+!outputs/runs/*/gnn/metrics.json
+!outputs/runs/*/pc/metrics.json
+!outputs/runs/*/pc/groundtruth_evaluation.json
+!outputs/runs/*/fold_temperatures.json
+
+# Allow HPO summary reports and best params
+!outputs/*_report.json
+!outputs/*_best_params.json
 
 # Large groundtruth files (exceed GitHub 100MB limit)
 data/groundtruth/evidence_sentence_groundtruth.csv

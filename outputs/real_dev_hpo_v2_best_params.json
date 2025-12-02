@@ -1,0 +1,26 @@
+{
+  "trial_number": 0,
+  "macro_f1": 0.7475145167261665,
+  "params": {
+    "lr": 2.3949658621809523e-05,
+    "batch_size": 16,
+    "epochs": 3,
+    "lora_r": 16,
+    "lora_alpha": 16,
+    "lora_dropout": 0.08600671535725328,
+    "neg_per_pos": 8,
+    "xpost_neg_frac": 0.17743334530584068,
+    "context_mode": "none",
+    "sent_max_len": 256,
+    "loss_type": "bce_ranking",
+    "rank_weight": 0.48767041543661915,
+    "rank_margin": 0.39144316052141515,
+    "pos_weight_scale": 1.3517633818274124
+  },
+  "user_attrs": {
+    "ece": 0.040425475818544464,
+    "f1": 0.5029772329246935,
+    "macro_f1": 0.7475145167261665,
+    "precision@5": 0.8
+  }
+}

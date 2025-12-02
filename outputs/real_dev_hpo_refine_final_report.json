@@ -1,0 +1,37 @@
+{
+  "phase3_summary": {
+    "total_trials": 15,
+    "successful_trials": 13,
+    "best_trial": 8,
+    "f1_mean": 0.5065396506783364,
+    "f1_std": 0.01131639520023346,
+    "f1_max": 0.5195270512361161
+  },
+  "best_hyperparameters": {
+    "lr": 1.9797685303325088e-05,
+    "rank_weight": 0.6683488175683096,
+    "rank_margin": 0.31284391367151115,
+    "lora_dropout": 0.06434288749538357,
+    "neg_per_pos": 10
+  },
+  "best_metrics": {
+    "f1": 0.5195270512361161,
+    "macro_f1": 0.756009221186243,
+    "precision@5": 0.8,
+    "ece": 0.5058330370404338
+  },
+  "phase2_baseline": {
+    "f1": 0.503,
+    "macro_f1": 0.7475,
+    "precision@5": 0.8,
+    "ece": 0.0404
+  },
+  "improvement": {
+    "f1_delta": 0.016527051236116086,
+    "f1_pct": 3.2856960707984264,
+    "macro_f1_delta": 0.008509221186242977,
+    "macro_f1_pct": 1.138357349330164,
+    "ece_delta": 0.4654330370404338
+  },
+  "conclusion": "IMPROVED - Found better hyperparameters"
+}
