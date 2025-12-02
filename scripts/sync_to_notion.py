@@ -23,6 +23,9 @@ Usage:
     # Sync HPO summary report
     python scripts/sync_to_notion.py --summary outputs/real_dev_hpo_refine_final_report.json
     
+    # Sync GNN pipeline results
+    python scripts/sync_to_notion.py --gnn outputs/runs/real_dev
+    
     # Filter by pattern (only sync items containing "real_dev")
     python scripts/sync_to_notion.py --pattern real_dev
     
@@ -121,6 +124,11 @@ def main():
         help="Sync specific HPO summary JSON file",
     )
     parser.add_argument(
+        "--gnn",
+        type=str,
+        help="Sync GNN pipeline results from run directory (e.g., outputs/runs/real_dev)",
+    )
+    parser.add_argument(
         "--pattern",
         type=str,
         help="Filter items by pattern (e.g., 'real_dev')",
@@ -212,7 +220,7 @@ def main():
         logger.error(str(e))
         sys.exit(1)
 
-    results = {"hpo_pages": [], "training_pages": [], "summary_pages": []}
+    results = {"hpo_pages": [], "training_pages": [], "summary_pages": [], "gnn_pages": []}
 
     # Sync specific study
     if args.study:
@@ -238,6 +246,13 @@ def main():
         if page_id:
             results["summary_pages"].append(page_id)
 
+    # Sync GNN pipeline results
+    elif args.gnn:
+        logger.info(f"Syncing GNN pipeline results: {args.gnn}")
+        page_id = sync.sync_gnn_pipeline(args.gnn)
+        if page_id:
+            results["gnn_pages"] = [page_id]
+
     # Sync all
     else:
         logger.info("Syncing all results to Notion...")
@@ -253,6 +268,7 @@ def main():
     logger.info(f"  HPO trial pages created: {len(results['hpo_pages'])}")
     logger.info(f"  Training run pages created: {len(results['training_pages'])}")
     logger.info(f"  Summary pages created: {len(results['summary_pages'])}")
+    logger.info(f"  GNN pipeline pages created: {len(results.get('gnn_pages', []))}")
     logger.info("=" * 60)
 
 

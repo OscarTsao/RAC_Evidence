@@ -1,0 +1,30 @@
+exp: real_dev_pc_v2
+seed: 42
+
+data:
+  raw_dir: data/raw_real
+
+model:
+  name: BAAI/bge-reranker-v2-m3
+  max_length: 512
+
+train:
+  lr: 2e-5
+  batch_size: 16
+  epochs: 4
+  gradient_accumulation: 1
+  warmup_ratio: 0.06
+  logging_steps: 50
+  eval_steps: 200
+  save_steps: 200
+  bf16: true
+  fp16: false
+  gradient_checkpointing: false
+  num_workers: 4
+  n_folds: 5
+  early_stopping_patience: 3
+  focal_alpha: 0.9
+  focal_gamma: 2.0
+  grad_clip: 1.0
+
+output_dir: outputs/runs/real_dev_pc_v2

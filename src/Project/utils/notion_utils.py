@@ -471,6 +471,154 @@ class NotionSync:
             logger.error(f"Failed to create summary page: {e}")
             return None
 
+    def sync_gnn_pipeline(
+        self,
+        run_dir: str | Path,
+        run_name: str | None = None,
+        database_id: str | None = None,
+    ) -> str | None:
+        """Sync GNN pipeline results to Notion.
+        
+        Args:
+            run_dir: Path to the training run output directory containing gnn_pipeline_summary.json
+            run_name: Optional name for the run (defaults to directory name)
+            database_id: Override database ID
+        
+        Returns:
+            Created Notion page ID or None if failed
+        """
+        db_id = database_id or self.training_database_id or self.hpo_database_id
+        if not db_id:
+            raise ValueError("No database ID available for GNN results")
+
+        run_dir = Path(run_dir)
+        if not run_dir.exists():
+            raise FileNotFoundError(f"Run directory not found: {run_dir}")
+
+        run_name = run_name or run_dir.name
+
+        # Load GNN pipeline summary
+        summary_path = run_dir / "gnn_pipeline_summary.json"
+        if not summary_path.exists():
+            logger.warning(f"GNN pipeline summary not found: {summary_path}")
+            return None
+
+        with open(summary_path) as f:
+            summary = json.load(f)
+
+        # Extract component metrics
+        evidence = summary.get("components", {}).get("evidence_model", {}).get("metrics", {})
+        graph = summary.get("components", {}).get("graph_construction", {})
+        hgt = summary.get("components", {}).get("hgt_model", {})
+        evaluation = summary.get("components", {}).get("evaluation", {})
+        comparison = summary.get("comparison_to_baseline", {})
+
+        # Get training metrics from last epoch
+        training_metrics = hgt.get("training_metrics", {})
+        last_epoch = training_metrics.get("epoch_3", training_metrics.get("epoch_2", {}))
+
+        # Prepare data for Notion
+        pipeline_data = {
+            "Run Name": f"{run_name} - GNN Pipeline",
+            "Status": summary.get("pipeline_status", "unknown").replace("_", " ").title(),
+            "Evaluation Status": summary.get("evaluation_status", "unknown").replace("_", " ").title(),
+            "Created": summary.get("date", datetime.now().isoformat()),
+            
+            # Evidence (Cross-Encoder) metrics
+            "CE Macro F1": evidence.get("macro_f1_calibrated"),
+            "CE F1": evidence.get("f1_calibrated"),
+            "CE AUPRC": evidence.get("auprc"),
+            "Coverage@5": evidence.get("coverage_at_5"),
+            "Coverage@10": evidence.get("coverage_at_10"),
+            "OOF Predictions": summary.get("components", {}).get("evidence_model", {}).get("oof_predictions"),
+            
+            # Graph construction
+            "Num Graphs": graph.get("num_graphs"),
+            "Num Sentences": graph.get("num_sentences"),
+            "Num Criteria": graph.get("num_criteria"),
+            "Embedding Dim": graph.get("embedding_dim"),
+            "TopK Per CID": graph.get("topk_per_cid"),
+            
+            # HGT model
+            "HGT Parameters": hgt.get("parameters"),
+            "HGT Layers": hgt.get("architecture", {}).get("layers"),
+            "HGT Hidden": hgt.get("architecture", {}).get("hidden_channels"),
+            "HGT Heads": hgt.get("architecture", {}).get("num_heads"),
+            "Training Epochs": hgt.get("training", {}).get("epochs"),
+            
+            # Training results
+            "Final Total Loss": last_epoch.get("total_loss"),
+            "Final Edge Loss": last_epoch.get("edge_loss"),
+            "Final Node Loss": last_epoch.get("node_loss"),
+            "Final Consistency Loss": last_epoch.get("consistency_loss"),
+            
+            # GNN evaluation (if available)
+            "GNN Macro F1": evaluation.get("metrics", {}).get("best_macro_f1") if evaluation.get("status") != "blocked" else None,
+            "GNN Note": evaluation.get("metrics", {}).get("note") or evaluation.get("reason", "").replace("_", " "),
+            
+            # Comparison
+            "Baseline CE Macro F1": comparison.get("evidence_ce_macro_f1"),
+            "Target Improvement": comparison.get("expected_improvement"),
+            "Target GNN Macro F1": comparison.get("target_gnn_macro_f1"),
+            
+            # Full summary as JSON
+            "Pipeline JSON": json.dumps(summary, indent=2),
+        }
+
+        schema = {
+            "Run Name": "title",
+            "Status": "select",
+            "Evaluation Status": "select",
+            "Created": "date",
+            # Evidence metrics
+            "CE Macro F1": "number",
+            "CE F1": "number",
+            "CE AUPRC": "number",
+            "Coverage@5": "number",
+            "Coverage@10": "number",
+            "OOF Predictions": "number",
+            # Graph construction
+            "Num Graphs": "number",
+            "Num Sentences": "number",
+            "Num Criteria": "number",
+            "Embedding Dim": "number",
+            "TopK Per CID": "number",
+            # HGT model
+            "HGT Parameters": "number",
+            "HGT Layers": "number",
+            "HGT Hidden": "number",
+            "HGT Heads": "number",
+            "Training Epochs": "number",
+            # Training results
+            "Final Total Loss": "number",
+            "Final Edge Loss": "number",
+            "Final Node Loss": "number",
+            "Final Consistency Loss": "number",
+            # GNN evaluation
+            "GNN Macro F1": "number",
+            "GNN Note": "rich_text",
+            # Comparison
+            "Baseline CE Macro F1": "number",
+            "Target Improvement": "number",
+            "Target GNN Macro F1": "number",
+            # Full summary
+            "Pipeline JSON": "rich_text",
+        }
+
+        properties = self._create_page_properties(pipeline_data, schema)
+
+        try:
+            response = self.client.pages.create(
+                parent={"database_id": db_id},
+                properties=properties,
+            )
+            page_id = response["id"]
+            logger.info(f"Created Notion page for GNN pipeline '{run_name}': {page_id}")
+            return page_id
+        except Exception as e:
+            logger.error(f"Failed to create GNN pipeline page: {e}")
+            return None
+
 
 def sync_all_results(
     optuna_db: str = "sqlite:///optuna.db",

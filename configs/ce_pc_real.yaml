@@ -8,16 +8,22 @@ data:
   chunk_max_len: 512
   stride: 128
 
+rerank:
+  agg: max  # Aggregation method for chunk-level scores (max, mean, topm)
+  topm: 2   # Top-m parameter for topm aggregation
+
 train:
   lr: 1e-3
-  batch_size: 32  # Conservative for 24GB GPU
+  batch_size: 32  # Maximum for 24GB GPU with bge-reranker-v2-m3 (~22GB model)
   epochs: 100
   patience: 20
   use_amp: true
   amp_dtype: bf16
   bf16: true
   grad_accum: 4  # Effective batch size = 32 * 4 = 128
-  gradient_checkpointing: false  # Disable for speed
-  num_workers: 8  # Increase data loading workers
-  save_steps: 2000  # Save less frequently
+  gradient_checkpointing: true  # Enable to reduce memory usage
+  num_workers: 8  # Conservative setting for stable training
+  save_steps: 2000  # Save checkpoints every 2000 steps
   shuffle: true
+  dataloader_pin_memory: true  # Faster CPU->GPU transfer
+  dataloader_prefetch_factor: 2  # Prefetch batches (reduced from 4)

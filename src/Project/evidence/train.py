@@ -18,8 +18,8 @@ from transformers import (
     TrainingArguments,
 )
 
-from Project.calib.temperature import TemperatureScaler
 from Project.evidence.data_builder import EvidenceDataBuilder, SCExample
+from Project.utils.cv_utils import fit_per_class_temperature
 from Project.utils.hydra_utils import cfg_get as _cfg_get
 from Project.utils.logging import get_logger
 
@@ -154,36 +154,10 @@ def train_fold(
             dev_logits.extend(logits.cpu().tolist())
             dev_cids.extend([ex.cid for ex in batch_examples])
 
-    # Fit global temperature (fallback)
-    scaler = TemperatureScaler()
-    global_temp = scaler.fit(dev_logits, dev_labels)
-    logger.info(f"Fold {fold} global temperature: {global_temp:.4f}")
-
-    # Fit per-class temperatures
-    per_class_temps = {}
-    cid_to_idx = {}
-    for i, (logit, label, cid) in enumerate(zip(dev_logits, dev_labels, dev_cids)):
-        if cid not in cid_to_idx:
-            cid_to_idx[cid] = []
-        cid_to_idx[cid].append(i)
-
-    for cid, indices in cid_to_idx.items():
-        cid_logits = [dev_logits[i] for i in indices]
-        cid_labels = [dev_labels[i] for i in indices]
-
-        if len(cid_logits) < 10:  # Skip small classes
-            per_class_temps[cid] = global_temp
-            logger.info(f"  {cid}: {len(cid_logits)} samples, using global temp")
-        else:
-            temp_scaler = TemperatureScaler()
-            cid_temp = temp_scaler.fit(cid_logits, cid_labels)
-            per_class_temps[cid] = cid_temp
-            logger.info(f"  {cid}: {len(cid_logits)} samples, temp={cid_temp:.4f}")
-
-    temperature_dict = {
-        "global": global_temp,
-        "per_class": per_class_temps
-    }
+    temperature_dict = fit_per_class_temperature(dev_logits, dev_labels, dev_cids)
+    logger.info(
+        "Fold %d temperatures: global=%.4f", fold, temperature_dict.get("global", 1.0)
+    )
 
     return ckpt_path, temperature_dict
 
