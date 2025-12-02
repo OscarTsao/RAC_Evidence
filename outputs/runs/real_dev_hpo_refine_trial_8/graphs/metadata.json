@@ -1,0 +1,8 @@
+{
+  "num_graphs": 1477,
+  "num_posts": 1477,
+  "num_sentences": 29888,
+  "num_criteria": 9,
+  "top_k": 10,
+  "embedding_dim": 1024
+}

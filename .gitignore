@@ -60,6 +60,9 @@ outputs/runs/*
 !outputs/runs/*/pc/metrics.json
 !outputs/runs/*/pc/groundtruth_evaluation.json
 !outputs/runs/*/fold_temperatures.json
+!outputs/runs/*/graphs/metadata.json
+!outputs/runs/*/bi/bi_meta.json
+!outputs/runs/*/retrieval_sweep/*.json
 
 # Allow HPO summary reports and best params
 !outputs/*_report.json
